@@ -1,0 +1,15 @@
+<!-- @dsCard group="Data" height=120 subtitle="Dashboard row with trends" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>StatTile — preview</title><style>body{margin:0;padding:20px;background:var(--surface);color:var(--ink);font-family:var(--font-sans)}.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.stack{display:flex;flex-direction:column;gap:16px;max-width:420px}</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var M = window.MFT, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'row', style: { gap: '40px', alignItems: 'flex-start' } },
+    h(M.StatTile, { label: 'Spent this month', minorUnits: 3184000, trend: { direction: 'up', sentiment: 'negative', text: '₱2,300 more than September' } }),
+    h(M.StatTile, { label: 'Income', minorUnits: 5200000, trend: { direction: 'flat', sentiment: 'neutral', text: 'Same as September' } }),
+    h(M.StatTile, { label: 'Saved', minorUnits: 1350000, trend: { direction: 'up', sentiment: 'positive', text: '26% of income' } })));
+</script>
+</body>
+</html>

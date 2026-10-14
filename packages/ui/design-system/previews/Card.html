@@ -1,0 +1,16 @@
+<!-- @dsCard group="Layout" height=218 subtitle="Budget card with a period switch" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Card — preview</title><style>body{margin:0;padding:20px;background:var(--surface);color:var(--ink);font-family:var(--font-sans)}.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.stack{display:flex;flex-direction:column;gap:16px;max-width:420px}</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var M = window.MFT, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h(function Demo() {
+    var p = React.useState('month');
+    return h(M.Card, { title: 'Budget', subtitle: 'October 2026', style: { maxWidth: '480px' }, action: h(M.SegmentedControl, { 'aria-label': 'Period', size: 'sm', value: p[0], onChange: p[1], options: [{ value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }] }) },
+      h(M.StatTile, { label: 'Left to spend', minorUnits: 1816000 }));
+  }));
+</script>
+</body>
+</html>

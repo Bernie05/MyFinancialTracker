@@ -1,0 +1,56 @@
+.mft-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+
+.mft-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-5) 0;
+}
+
+.mft-card__titles {
+  min-width: 0;
+}
+
+.mft-card__title {
+  margin: 0;
+  font-size: var(--type-title-2-size);
+  line-height: var(--type-title-2-line);
+  font-weight: var(--type-title-2-weight);
+}
+
+.mft-card__subtitle {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+}
+
+.mft-card__action {
+  flex: none;
+}
+
+.mft-card--pad-md .mft-card__body {
+  padding: var(--space-5);
+}
+
+.mft-card--pad-none .mft-card__header {
+  padding-bottom: var(--space-3);
+}
+
+@media (max-width: 480px) {
+  .mft-card__header {
+    padding: var(--space-4) var(--space-4) 0;
+  }
+  .mft-card--pad-md .mft-card__body {
+    padding: var(--space-4);
+  }
+}

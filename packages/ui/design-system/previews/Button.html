@@ -1,0 +1,21 @@
+<!-- @dsCard group="Actions" height=140 subtitle="Primary, secondary, ghost, danger; loading" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Button — preview</title><style>body{margin:0;padding:20px;background:var(--surface);color:var(--ink);font-family:var(--font-sans)}.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.stack{display:flex;flex-direction:column;gap:16px;max-width:420px}</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var M = window.MFT, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'stack', style: { maxWidth: 'none' } },
+    h('div', { className: 'row' },
+      h(M.Button, null, 'Add expense'),
+      h(M.Button, { variant: 'secondary' }, 'Export CSV'),
+      h(M.Button, { variant: 'ghost' }, 'See all'),
+      h(M.Button, { variant: 'danger' }, 'Delete transaction')),
+    h('div', { className: 'row' },
+      h(M.Button, { size: 'sm' }, 'Save goal'),
+      h(M.Button, { size: 'sm', variant: 'secondary', loading: true }, 'Syncing'),
+      h(M.Button, { size: 'sm', variant: 'secondary', disabled: true }, 'Archived'))));
+</script>
+</body>
+</html>

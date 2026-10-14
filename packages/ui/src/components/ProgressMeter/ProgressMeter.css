@@ -1,0 +1,84 @@
+.mft-meter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-family: var(--font-sans);
+  color: var(--ink);
+}
+
+.mft-meter__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.mft-meter__label {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  font-weight: 500;
+}
+
+.mft-meter__value {
+  color: var(--ink-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mft-meter__track {
+  height: 10px;
+  overflow: hidden;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-pill);
+}
+
+.mft-meter__fill {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 240ms ease;
+}
+
+.mft-meter__status {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+}
+
+/* Budget */
+.mft-meter--ok .mft-meter__fill {
+  background: var(--pine);
+}
+.mft-meter--warn .mft-meter__fill {
+  background: var(--marigold);
+  box-shadow: inset 0 0 0 1px var(--marigold-ink);
+}
+.mft-meter--warn .mft-meter__status {
+  color: var(--marigold-ink);
+  font-weight: 500;
+}
+.mft-meter--over .mft-meter__fill {
+  background: var(--expense);
+}
+.mft-meter--over .mft-meter__status {
+  color: var(--expense);
+  font-weight: 600;
+}
+
+/* Goal: marigold fill, outlined in marigold-ink so its end holds 3:1 on the track. */
+.mft-meter--goal .mft-meter__fill {
+  background: var(--marigold);
+  box-shadow: inset 0 0 0 1px var(--marigold-ink);
+}
+.mft-meter--complete .mft-meter__status {
+  color: var(--marigold-ink);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mft-meter__fill {
+    transition: none;
+  }
+}
