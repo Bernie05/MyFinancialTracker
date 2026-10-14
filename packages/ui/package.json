@@ -14,7 +14,8 @@
       "import": "./dist/index.js"
     },
     "./styles.css": "./dist/index.css",
-    "./tokens.css": "./src/tokens/tokens.css"
+    "./tokens.css": "./src/tokens/tokens.css",
+    "./logo-mark.svg": "./assets/logo-mark.svg"
   },
   "files": [
     "dist",

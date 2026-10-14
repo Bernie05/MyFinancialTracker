@@ -1,9 +1,11 @@
 {
   "name": "myfinancialtracker",
   "private": true,
-  "workspaces": ["packages/*"],
+  "workspaces": ["packages/*", "apps/*"],
   "scripts": {
     "build": "bun run --filter '@mft/ui' build",
+    "dev": "bun run build && bun run --filter '@mft/web' dev",
+    "db:setup": "bun run --filter '@mft/web' db:generate && bun run --filter '@mft/web' db:migrate && bun run --filter '@mft/web' db:seed",
     "typecheck": "bun run --filter '*' typecheck",
     "ds:export": "bun run --filter '@mft/ui' export:ds"
   }
