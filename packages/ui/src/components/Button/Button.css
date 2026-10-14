@@ -1,0 +1,122 @@
+.mft-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.mft-button--md {
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+
+.mft-button--sm {
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+}
+
+.mft-button--full {
+  width: 100%;
+}
+
+.mft-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.mft-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.mft-button--loading:disabled {
+  cursor: progress;
+  opacity: 1;
+}
+
+/* Variants */
+.mft-button--primary {
+  background: var(--pine);
+  color: var(--on-pine);
+}
+.mft-button--primary:hover:not(:disabled) {
+  background: var(--pine-hover);
+}
+
+.mft-button--secondary {
+  background: var(--surface-raised);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.mft-button--secondary:hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+
+.mft-button--ghost {
+  background: transparent;
+  color: var(--pine);
+}
+.mft-button--ghost:hover:not(:disabled) {
+  background: var(--pine-soft);
+}
+
+.mft-button--danger {
+  background: var(--expense);
+  color: var(--on-expense);
+}
+.mft-button--danger:hover:not(:disabled) {
+  background: var(--expense-hover);
+}
+
+.mft-button__icon {
+  display: inline-flex;
+  width: 1.1em;
+  height: 1.1em;
+}
+.mft-button__icon > svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Loading: the label stays in the layout (no width jump) but is hidden. */
+.mft-button--loading .mft-button__label,
+.mft-button--loading .mft-button__icon {
+  visibility: hidden;
+}
+
+.mft-button__spinner {
+  position: absolute;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: var(--radius-pill);
+  animation: mft-spin 700ms linear infinite;
+}
+
+@keyframes mft-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mft-button {
+    transition: none;
+  }
+  .mft-button__spinner {
+    animation-duration: 2s;
+  }
+}

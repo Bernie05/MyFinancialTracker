@@ -1,0 +1,62 @@
+.mft-amount {
+  display: inline-block;
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
+}
+
+/* The symbol drops to ~0.62em and rides the cap line: the digits read first. */
+.mft-amount__symbol {
+  font-size: 0.62em;
+  font-weight: 600;
+  vertical-align: 0.42em;
+  margin-right: 0.08em;
+}
+
+.mft-amount__sign {
+  margin-right: 0.04em;
+}
+
+.mft-amount--sm {
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+  font-weight: 600;
+}
+.mft-amount--sm .mft-amount__symbol {
+  font-size: 0.85em;
+  vertical-align: baseline;
+}
+
+.mft-amount--md {
+  font-size: var(--type-body-strong-size);
+  line-height: var(--type-body-strong-line);
+  font-weight: var(--type-body-strong-weight);
+}
+.mft-amount--md .mft-amount__symbol {
+  font-size: 0.8em;
+  vertical-align: 0.12em;
+}
+
+.mft-amount--lg {
+  font-size: var(--type-amount-size);
+  line-height: var(--type-amount-line);
+  font-weight: var(--type-amount-weight);
+  letter-spacing: var(--type-amount-tracking);
+}
+
+.mft-amount--display {
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-weight: var(--type-display-weight);
+  letter-spacing: var(--type-display-tracking);
+}
+
+.mft-amount--neutral {
+  color: var(--ink);
+}
+.mft-amount--income {
+  color: var(--income);
+}
+.mft-amount--expense {
+  color: var(--expense);
+}

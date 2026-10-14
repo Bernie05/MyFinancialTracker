@@ -1,0 +1,16 @@
+<!-- @dsCard group="Data" height=344 subtitle="Budget ok, near limit, over; savings goal" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ProgressMeter — preview</title><style>body{margin:0;padding:20px;background:var(--surface);color:var(--ink);font-family:var(--font-sans)}.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.stack{display:flex;flex-direction:column;gap:16px;max-width:420px}</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var M = window.MFT, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'stack' },
+    h(M.ProgressMeter, { kind: 'budget', label: 'Groceries', value: 520000, max: 1000000, valueText: '₱5,200 of ₱10,000', status: '₱4,800 left' }),
+    h(M.ProgressMeter, { kind: 'budget', label: 'Dining out', value: 460000, max: 500000, valueText: '₱4,600 of ₱5,000', status: '₱400 left' }),
+    h(M.ProgressMeter, { kind: 'budget', label: 'Shopping', value: 380000, max: 300000, valueText: '₱3,800 of ₱3,000' }),
+    h(M.ProgressMeter, { kind: 'goal', label: 'Emergency fund', value: 6200000, max: 10000000, valueText: '₱62,000 of ₱100,000', status: 'On track for March 2027' })));
+</script>
+</body>
+</html>

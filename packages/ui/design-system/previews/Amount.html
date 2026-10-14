@@ -1,0 +1,18 @@
+<!-- @dsCard group="Data" height=144 subtitle="Display balance, ledger signs, peso and dollar" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Amount — preview</title><style>body{margin:0;padding:20px;background:var(--surface);color:var(--ink);font-family:var(--font-sans)}.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.stack{display:flex;flex-direction:column;gap:16px;max-width:420px}</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var M = window.MFT, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'stack' },
+    h(M.Amount, { minorUnits: 18452075, size: 'display' }),
+    h('div', { className: 'row' },
+      h(M.Amount, { minorUnits: 4500000, signDisplay: 'always' }),
+      h(M.Amount, { minorUnits: -125050, signDisplay: 'always' }),
+      h(M.Amount, { minorUnits: 239900, currency: 'USD', locale: 'en-US', size: 'lg' }),
+      h(M.Amount, { minorUnits: 180000, signDisplay: 'never', size: 'sm' }))));
+</script>
+</body>
+</html>

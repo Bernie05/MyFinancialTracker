@@ -1,0 +1,49 @@
+.mft-segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+}
+
+.mft-segmented__option {
+  flex: 1 1 0;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: transparent;
+  color: var(--ink-muted);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mft-segmented--md .mft-segmented__option {
+  min-height: 34px;
+  padding: 0 var(--space-4);
+  font-size: var(--type-body-size);
+}
+
+.mft-segmented--sm .mft-segmented__option {
+  min-height: 26px;
+  padding: 0 var(--space-3);
+  font-size: var(--type-label-size);
+}
+
+.mft-segmented__option:hover:not(.mft-segmented__option--selected) {
+  color: var(--ink);
+}
+
+/* Selected: raised chip + bold weight, so the state never rests on color alone. */
+.mft-segmented__option--selected {
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-weight: 650;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.mft-segmented__option:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}

@@ -1,0 +1,45 @@
+.mft-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  font-family: var(--font-sans);
+  color: var(--ink);
+}
+
+.mft-stat__label {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+}
+
+.mft-stat--display .mft-stat__label {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+
+.mft-stat__trend {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: var(--space-1) 0 0;
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+  font-weight: 500;
+}
+
+.mft-stat__trend > svg {
+  flex: none;
+}
+
+.mft-stat__trend--positive {
+  color: var(--income);
+}
+.mft-stat__trend--negative {
+  color: var(--expense);
+}
+.mft-stat__trend--neutral {
+  color: var(--ink-muted);
+}

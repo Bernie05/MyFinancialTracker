@@ -1,0 +1,133 @@
+/* MyFinancialTracker — generated from src/tokens/tokens.ts. Do not edit by hand. */
+
+@font-face {
+  font-family: "Hanken Grotesk";
+  src: url("../../assets/fonts/HankenGrotesk-Variable.woff") format("woff");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Hanken Grotesk";
+  src: url("../../assets/fonts/HankenGrotesk-Italic-Variable.woff") format("woff");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --surface: #f4f7f5;
+  --surface-raised: #ffffff;
+  --surface-sunken: #e7eeea;
+  --line: #d3ddd8;
+  --line-strong: #7d9188;
+  --ink: #13221d;
+  --ink-muted: #4c5f58;
+  --pine: #1d5a47;
+  --pine-hover: #16483a;
+  --on-pine: #ffffff;
+  --pine-soft: #dcebe4;
+  --marigold: #e0a526;
+  --on-marigold: #2a1d00;
+  --marigold-ink: #7a5300;
+  --marigold-soft: #fbf0d4;
+  --income: #1f5fae;
+  --income-soft: #e1ecf9;
+  --expense: #b3441a;
+  --expense-hover: #933612;
+  --on-expense: #ffffff;
+  --expense-soft: #f9e5dc;
+  --focus: #1f5fae;
+  --chart-1: #2a78d6;
+  --chart-2: #e0a526;
+  --chart-3: #1f8a68;
+  --chart-4: #d0582a;
+  --chart-5: #8a63c9;
+  --chart-6: #e87ba4;
+  --shadow-raised: 0 1px 2px rgba(19, 34, 29, 0.06), 0 4px 12px rgba(19, 34, 29, 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface: #0f1714;
+    --surface-raised: #16201c;
+    --surface-sunken: #0b110f;
+    --line: #26332e;
+    --line-strong: #62786e;
+    --ink: #e4ece8;
+    --ink-muted: #9fb2aa;
+    --pine: #5fbf9b;
+    --pine-hover: #7fd0b1;
+    --on-pine: #0a1a14;
+    --pine-soft: #1b3a2f;
+    --marigold: #e3b04a;
+    --on-marigold: #2a1d00;
+    --marigold-ink: #e9bd5e;
+    --marigold-soft: #3a2f14;
+    --income: #7db0f0;
+    --income-soft: #182a40;
+    --expense: #f0916a;
+    --expense-hover: #f5a888;
+    --on-expense: #2a0e03;
+    --expense-soft: #3d2219;
+    --focus: #8bb8f2;
+    --chart-1: #3987e5;
+    --chart-2: #c08410;
+    --chart-3: #199e70;
+    --chart-4: #d95926;
+    --chart-5: #9085e9;
+    --chart-6: #d55181;
+    --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #0f1714;
+  --surface-raised: #16201c;
+  --surface-sunken: #0b110f;
+  --line: #26332e;
+  --line-strong: #62786e;
+  --ink: #e4ece8;
+  --ink-muted: #9fb2aa;
+  --pine: #5fbf9b;
+  --pine-hover: #7fd0b1;
+  --on-pine: #0a1a14;
+  --pine-soft: #1b3a2f;
+  --marigold: #e3b04a;
+  --on-marigold: #2a1d00;
+  --marigold-ink: #e9bd5e;
+  --marigold-soft: #3a2f14;
+  --income: #7db0f0;
+  --income-soft: #182a40;
+  --expense: #f0916a;
+  --expense-hover: #f5a888;
+  --on-expense: #2a0e03;
+  --expense-soft: #3d2219;
+  --focus: #8bb8f2;
+  --chart-1: #3987e5;
+  --chart-2: #c08410;
+  --chart-3: #199e70;
+  --chart-4: #d95926;
+  --chart-5: #9085e9;
+  --chart-6: #d55181;
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-pill: 999px;
+  --font-sans: "Hanken Grotesk", "Hanken Grotesk Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+}

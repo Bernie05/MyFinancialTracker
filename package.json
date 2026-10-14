@@ -1,0 +1,10 @@
+{
+  "name": "myfinancialtracker",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "build": "bun run --filter '@mft/ui' build",
+    "typecheck": "bun run --filter '*' typecheck",
+    "ds:export": "bun run --filter '@mft/ui' export:ds"
+  }
+}

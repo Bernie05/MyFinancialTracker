@@ -1,0 +1,7 @@
+node_modules/
+dist/
+/design-system-export/
+*.log
+.DS_Store
+.env*
+!.env.example

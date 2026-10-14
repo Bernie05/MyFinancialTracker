@@ -1,0 +1,39 @@
+.mft-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-sans);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  white-space: nowrap;
+}
+
+.mft-badge--neutral {
+  background: var(--pine-soft);
+  color: var(--ink);
+}
+
+.mft-badge--income {
+  background: var(--income-soft);
+  color: var(--income);
+}
+
+.mft-badge--expense {
+  background: var(--expense-soft);
+  color: var(--expense);
+}
+
+.mft-badge--goal {
+  background: var(--marigold-soft);
+  color: var(--marigold-ink);
+}
+
+.mft-badge__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  flex: none;
+}

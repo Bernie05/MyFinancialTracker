@@ -1,0 +1,45 @@
+.mft-txn {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--line);
+  font-family: var(--font-sans);
+  color: var(--ink);
+}
+
+.mft-txn__main {
+  min-width: 0;
+}
+
+.mft-txn__description {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  font-weight: 500;
+}
+
+.mft-txn__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin: var(--space-1) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+}
+
+.mft-txn__amount {
+  text-align: right;
+}
+
+@media (max-width: 480px) {
+  .mft-txn {
+    padding: var(--space-3) var(--space-4);
+  }
+}
