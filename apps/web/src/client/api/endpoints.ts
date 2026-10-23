@@ -29,7 +29,8 @@ import { request } from "./client";
 export const api = {
   // Accounts
   me: () => request("/api/auth/me", z.object({ user: userSchema })),
-  register: (input: Credentials) => request("/api/auth/register", z.object({ user: userSchema }), { method: "POST", body: JSON.stringify(input) }),
+  /** Always the same 202 message, whether or not the email was new (no session; sign in next). */
+  register: (input: Credentials) => request("/api/auth/register", z.object({ message: z.string() }), { method: "POST", body: JSON.stringify(input) }),
   login: (input: Credentials) => request("/api/auth/login", z.object({ user: userSchema }), { method: "POST", body: JSON.stringify(input) }),
   logout: () => request("/api/auth/logout", null, { method: "POST", body: "{}" }),
   changePassword: (input: ChangePassword) => request("/api/auth/password", null, { method: "POST", body: JSON.stringify(input) }),

@@ -83,7 +83,7 @@ export function App() {
     if (session.status === "signed-in" && authPage) navigate(nextPath(), { replace: true });
   }, [session.status, authPage]);
 
-  if (authPage && session.status !== "signed-in") return <AuthPage mode={authPage} />;
+  if (authPage && session.status !== "signed-in") return <AuthPage key={authPage} mode={authPage} />;
   if (session.status !== "signed-in") return <div className="splash" role="status" aria-label="Loading" />;
   return <Shell key={session.user.id} user={session.user} />;
 }

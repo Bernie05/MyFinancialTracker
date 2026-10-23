@@ -8,6 +8,9 @@ import { createApiRoutes } from "./routes/api";
 import { createAuthRoutes, PUBLIC_AUTH_PATHS } from "./routes/auth";
 import { protect, withSecurityHeaders } from "./security";
 
+/** Largest request body accepted (audit SEC-7). The biggest real one is under 2 KB; Bun answers 413 above this. */
+export const MAX_REQUEST_BODY = 64 * 1024;
+
 export function createAppRoutes(db: Db) {
   const repos = createDrizzleRepositories(db);
   const auth = createAuthStore(db);

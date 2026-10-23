@@ -56,7 +56,10 @@ export function route<R extends Request>(handler: (req: R, server: Server<undefi
         return errorResponse(400, "Some fields need fixing.", fields);
       }
       if (err instanceof HttpError) return errorResponse(err.status, err.message, err.fields);
-      console.error(err);
+      // Route and a short reason only: Drizzle errors carry the bound parameters (hashes, emails) after the
+      // first line, so log the driver's own message (the cause) or just the first line.
+      const reason = err instanceof Error ? (err.cause instanceof Error ? err.cause.message : err.message.split("\n")[0]) : "unknown error";
+      console.error(`500 ${req.method} ${new URL(req.url).pathname}: ${reason}`);
       return errorResponse(500, "Something went wrong on our side. Try again.");
     }
   };

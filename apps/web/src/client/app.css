@@ -2538,6 +2538,14 @@ mark {
   color: var(--ink-muted);
 }
 
+.auth__notice {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
 .auth__form {
   display: flex;
   flex-direction: column;

@@ -58,7 +58,7 @@ Requests flow one way: **route → repository interface → Drizzle → SQLite**
 
 | Method | Path | Body / query | Returns |
 | --- | --- | --- | --- |
-| POST | `/api/auth/register` | `{ email, password }` | `201 { user }` and the session cookie; `400` weak password; `409` email can't be used; `429` too many attempts |
+| POST | `/api/auth/register` | `{ email, password }` | `202 { message }`, no cookie, same reply whether or not the email exists (sign in next); `400` weak password; `429` too many attempts |
 | POST | `/api/auth/login` | `{ email, password }` | `200 { user }` and a new session cookie; `401` "Invalid email or password"; `429` |
 | POST | `/api/auth/logout` | `{}` | `204`; deletes the session and clears the cookie |
 | GET | `/api/auth/me` | | `{ user: { id, email } }`, or `401` |

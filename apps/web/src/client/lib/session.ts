@@ -59,9 +59,22 @@ export async function signOut() {
 }
 
 /** The `next` path from the URL, if it's a safe same-site path; otherwise the Dashboard. */
-export function nextPath() {
-  const next = new URLSearchParams(window.location.search).get("next");
-  return next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/login") ? next : "/";
+export function nextPath(search = window.location.search, origin = window.location.origin) {
+  return safeNext(new URLSearchParams(search).get("next"), origin);
+}
+
+/**
+ * Only a same-site path: it must start with a single "/", contain no backslash (browsers read "/\evil.com"
+ * as "//evil.com"), and still resolve to this origin. Anything else goes to the Dashboard.
+ */
+export function safeNext(next: string | null, origin: string) {
+  if (!next || !/^\/(?![/\\])/.test(next) || next.includes("\\") || /[\u0000-\u001f]/.test(next)) return "/";
+  try {
+    if (new URL(next, origin).origin !== origin) return "/";
+  } catch {
+    return "/";
+  }
+  return next.startsWith("/login") || next.startsWith("/register") ? "/" : next;
 }
 
 // A request that hits 401 mid-session (expired, signed out elsewhere) lands on the login page.

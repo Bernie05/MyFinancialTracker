@@ -8,6 +8,9 @@ import { linkClick, navigate } from "../../lib/router";
 import { nextPath, signedIn } from "../../lib/session";
 
 type Mode = "login" | "register";
+
+/** The email typed on the register page, carried to the sign-in form (memory only, never stored). */
+let rememberedEmail = "";
 type FieldErrors = Partial<Record<"email" | "password", string>>;
 
 const copy = {
@@ -17,14 +20,18 @@ const copy = {
 
 /** Sign in and register share one page: the same card, fields and error handling. */
 export function AuthPage({ mode }: { mode: Mode }) {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(mode === "login" ? rememberedEmail : "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const text = copy[mode];
-  const keepNext = window.location.search; // carry ?next= between sign in and register
+  const params = new URLSearchParams(window.location.search);
+  // Carry ?next= between sign in and register (never the "registered" flag).
+  const nextParam = params.get("next");
+  const keepNext = nextParam ? `?next=${encodeURIComponent(nextParam)}` : "";
+  const justRegistered = mode === "login" && params.get("registered") === "1";
 
   useEffect(() => {
     document.title = `${text.title} · MyFinancialTracker`;
@@ -46,7 +53,16 @@ export function AuthPage({ mode }: { mode: Mode }) {
     setErrors({});
     setBusy(true);
     try {
-      const { user } = mode === "login" ? await api.login(parsed.data) : await api.register(parsed.data);
+      if (mode === "register") {
+        // Register never signs in (it answers the same either way): go sign in, email filled in.
+        await api.register(parsed.data);
+        rememberedEmail = parsed.data.email;
+        navigate(`/login?registered=1${nextParam ? `&next=${encodeURIComponent(nextParam)}` : ""}`, { replace: true });
+        setBusy(false);
+        return;
+      }
+      const { user } = await api.login(parsed.data);
+      rememberedEmail = "";
       signedIn(user);
       navigate(nextPath(), { replace: true });
     } catch (err) {
@@ -67,6 +83,11 @@ export function AuthPage({ mode }: { mode: Mode }) {
           {text.title}
         </h1>
         <p className="auth__subtitle">{text.subtitle}</p>
+        {justRegistered && (
+          <p className="auth__notice" role="status">
+            If this email can be used, your account is ready. Sign in to continue.
+          </p>
+        )}
         <form className="auth__form" onSubmit={onSubmit} noValidate>
           <TextField
             label="Email"
@@ -76,7 +97,7 @@ export function AuthPage({ mode }: { mode: Mode }) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             error={errors.email}
-            autoFocus
+            autoFocus={!justRegistered}
           />
           <div className="auth__password">
             <TextField
@@ -86,6 +107,7 @@ export function AuthPage({ mode }: { mode: Mode }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               error={errors.password}
+              autoFocus={justRegistered}
               hint={mode === "register" ? "At least 8 characters. A short sentence works well." : undefined}
             />
             <button type="button" className="link-text auth__toggle" aria-pressed={showPassword} onClick={() => setShowPassword((s) => !s)}>

@@ -9,7 +9,7 @@
  * - Security headers on every API response.
  */
 import type { Server } from "bun";
-import { clearSessionCookie, readSessionToken, SESSION_TTL, sessionCookie, type AuthStore } from "./auth";
+import { clearLegacyCookie, clearSessionCookie, readSessionToken, sessionCookie, usesLegacyCookie, type AuthStore } from "./auth";
 import { runAsUser } from "./context";
 
 // Route handlers take Request & { params } (Bun adds params); `any` covers that subtype only, results stay typed.
@@ -64,12 +64,17 @@ export function protect(routes: Record<string, MethodHandlers>, auth: AuthStore,
         const session = token ? await auth.findSession(token) : null;
         if (!session || !token) {
           const res = fail(401, "Sign in to continue.");
-          if (token) res.headers.append("Set-Cookie", clearSessionCookie(req)); // stale cookie: drop it
+          if (token) {
+            // Stale cookie: drop it (both names, in case it was the pre-__Host- one).
+            res.headers.append("Set-Cookie", clearSessionCookie(req));
+            res.headers.append("Set-Cookie", clearLegacyCookie());
+          }
           return withSecurityHeaders(res);
         }
         const res = withSecurityHeaders(await runAsUser(session.userId, () => handler(req, server)));
-        // Sliding expiry: re-send the cookie when the server extended the session.
-        if (session.renewed) res.headers.append("Set-Cookie", sessionCookie(req, token, SESSION_TTL));
+        // Re-send the cookie when the server extended the session, or to move it to the __Host- name.
+        if (session.renewed || usesLegacyCookie(req)) res.headers.append("Set-Cookie", sessionCookie(req, token, session.maxAgeMs));
+        if (usesLegacyCookie(req)) res.headers.append("Set-Cookie", clearLegacyCookie());
         return res;
       };
     }

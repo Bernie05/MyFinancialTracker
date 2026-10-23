@@ -3,8 +3,8 @@
  * user B must not be able to read, change or delete anything of user A's (404, never 403),
  * and the gate must refuse anonymous and cross-site requests.
  */
-import { afterAll, beforeAll, expect, test } from "bun:test";
-import { createAppRoutes } from "./app";
+import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
+import { createAppRoutes, MAX_REQUEST_BODY } from "./app";
 import { createDb } from "./db/client";
 import { runMigrations } from "./db/migrations";
 
@@ -14,7 +14,7 @@ let base: string;
 beforeAll(() => {
   const db = createDb(":memory:");
   runMigrations(db);
-  server = Bun.serve({ port: 0, routes: createAppRoutes(db) });
+  server = Bun.serve({ port: 0, routes: createAppRoutes(db), maxRequestBodySize: MAX_REQUEST_BODY });
   base = server.url.origin;
 });
 afterAll(() => server.stop(true));
@@ -33,14 +33,19 @@ function client() {
     const text = await res.text();
     return { status: res.status, body: text ? JSON.parse(text) : null, headers: res.headers };
   };
-  return { call, cookie: () => cookie };
+  /** Register (which never signs in) and then sign in, like the app does. */
+  const signUp = async (email: string, password: string) => {
+    expect((await call("POST", "/api/auth/register", { email, password })).status).toBe(202);
+    return call("POST", "/api/auth/login", { email, password });
+  };
+  return { call, signUp, cookie: () => cookie };
 }
 
 test("users can't see or touch each other's data", async () => {
   const a = client();
   const b = client();
-  expect((await a.call("POST", "/api/auth/register", { email: "alice@example.com", password: "alice long password" })).status).toBe(201);
-  expect((await b.call("POST", "/api/auth/register", { email: "bob@example.com", password: "bobs long password" })).status).toBe(201);
+  expect((await a.signUp("alice@example.com", "alice long password")).status).toBe(200);
+  expect((await b.signUp("bob@example.com", "bobs long password")).status).toBe(200);
 
   // A's data: a category, a card, a charge on it, a payment and an installment plan.
   const aCats = (await a.call("GET", "/api/categories")).body as { id: number; type: string; name: string }[];
@@ -80,13 +85,26 @@ test("users can't see or touch each other's data", async () => {
   expect((await b.call("POST", "/api/transactions", { type: "expense", amountMinor: 1, description: "x", categoryId: cat.id, occurredOn: "2026-10-01" })).status).toBe(400);
   expect((await b.call("POST", "/api/transactions", { type: "expense", amountMinor: 1, description: "x", categoryId: bCat.id, occurredOn: "2026-10-01", cardId: card.id })).status).toBe(400);
 
+  // Paths where B passes one of A's ids inside a write to B's own data (audit hardening note).
+  const bCatWithTx = (await b.call("POST", "/api/categories", { name: "B things", type: "expense", color: "#123456" })).body;
+  expect(bCatWithTx.id).toBeNumber();
+  await b.call("POST", "/api/transactions", { type: "expense", amountMinor: 1, description: "b", categoryId: bCatWithTx.id, occurredOn: "2026-10-01" });
+  const bCard = (await b.call("POST", "/api/cards", { name: "B card", limitMinor: 100_000, closingDay: 1, dueDay: 20, color: "red" })).body;
+  expect((await b.call("PATCH", `/api/categories/${bCatWithTx.id}`, { parentId: cat.id })).status).toBe(400); // A's category as parent
+  expect((await b.call("DELETE", `/api/categories/${bCatWithTx.id}?moveTo=${cat.id}`)).status).toBe(400); // move into A's category
+  expect(
+    (await b.call("POST", `/api/cards/${bCard.id}/installments`, { description: "x", categoryId: cat.id, purchasedOn: "2026-10-01", principalMinor: 100, months: 1 }))
+      .status,
+  ).toBe(400); // installment in A's category
+  expect((await b.call("GET", `/api/categories`)).body.some((c: { id: number }) => c.id === bCatWithTx.id)).toBe(true); // B's still there
+
   // B's lists show none of A's rows.
   const bTx = (await b.call("GET", "/api/transactions?pageSize=100")).body;
-  expect(bTx.total).toBe(0);
-  expect((await b.call("GET", "/api/cards")).body).toEqual([]);
+  expect(bTx.items.some((t: { id: number }) => t.id === tx.id)).toBe(false);
+  expect(((await b.call("GET", "/api/cards")).body as { id: number }[]).map((c) => c.id)).toEqual([bCard.id]);
   expect((await b.call("GET", "/api/alerts")).body).toEqual([]);
   expect(((await b.call("GET", "/api/categories")).body as { id: number }[]).some((c) => c.id === cat.id)).toBe(false);
-  expect((await b.call("GET", "/api/summary?month=2026-10")).body.expenseMinor).toBe(0);
+  expect((await b.call("GET", "/api/summary?month=2026-10")).body.expenseMinor).toBe(1); // only B's own ₱0.01
 
   // And A's data is untouched.
   expect((await a.call("GET", `/api/cards/${card.id}`)).body.name).toBe("A card");
@@ -102,7 +120,7 @@ test("the gate: 401 without a session, CSRF checks, headers, login/logout and ro
   expect((await anon.call("GET", "/api/health")).status).toBe(200);
 
   const c = client();
-  await c.call("POST", "/api/auth/register", { email: "Carol@Example.com", password: "carols long password" });
+  await c.signUp("Carol@Example.com", "carols long password");
   const first = c.cookie();
   expect((await c.call("GET", "/api/auth/me")).body.user.email).toBe("carol@example.com");
 
@@ -138,4 +156,42 @@ test("the gate: 401 without a session, CSRF checks, headers, login/logout and ro
   // Logout ends the session.
   expect((await c.call("POST", "/api/auth/logout", {})).status).toBe(204);
   expect((await fetch(`${base}/api/auth/me`, { headers: { Cookie: c.cookie() } })).status).toBe(401);
+});
+
+test("SEC-3: register answers the same for a new and an existing email, and signs no one in", async () => {
+  const x = client();
+  const y = client();
+  const created = await x.call("POST", "/api/auth/register", { email: "dana@example.com", password: "danas long password" });
+  const again = await y.call("POST", "/api/auth/register", { email: "Dana@example.com", password: "someone elses password" });
+  expect(created.status).toBe(202);
+  expect(again.status).toBe(created.status);
+  expect(again.body).toEqual(created.body);
+  expect(created.headers.get("set-cookie")).toBeNull();
+  expect(again.headers.get("set-cookie")).toBeNull();
+  // The existing account is untouched: the first password still works, the second doesn't.
+  expect((await x.call("POST", "/api/auth/login", { email: "dana@example.com", password: "danas long password" })).status).toBe(200);
+  expect((await y.call("POST", "/api/auth/login", { email: "dana@example.com", password: "someone elses password" })).status).toBe(401);
+});
+
+test("SEC-7: a body over 64 KB is refused with 413", async () => {
+  const res = await fetch(`${base}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: base },
+    body: JSON.stringify({ email: "x@example.com", password: "p".repeat(100 * 1024) }),
+  });
+  expect(res.status).toBe(413);
+});
+
+test("SEC-8: a failed login logs one line, without the password or the email", async () => {
+  const info = spyOn(console, "info").mockImplementation(() => {});
+  try {
+    await client().call("POST", "/api/auth/login", { email: "erin@example.com", password: "my secret guess" });
+    const lines = info.mock.calls.map((args) => String(args[0])).filter((l) => l.includes("login_fail"));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).not.toContain("my secret guess");
+    expect(lines[0]).not.toContain("erin@example.com");
+    expect(JSON.parse(lines[0]!)).toMatchObject({ evt: "login_fail", ip: expect.any(String), emailHash: expect.any(String) });
+  } finally {
+    info.mockRestore();
+  }
 });
