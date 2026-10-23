@@ -172,6 +172,20 @@ export const newTransactionSchema = z.object({
 });
 export type NewTransaction = z.input<typeof newTransactionSchema>;
 
+/** PATCH body: any of the editable fields (the type stays; a category or card must suit it). */
+export const updateTransactionSchema = z
+  .object({
+    amountMinor: amountMinorSchema,
+    description: z.string().trim().min(1, "Add a description.").max(120, "Keep it under 120 characters."),
+    categoryId: z.number().int().positive("Choose a category."),
+    occurredOn: dateSchema,
+    note: z.string().trim().max(500).nullable().transform((v) => v || null),
+    cardId: z.number().int().positive().nullable(),
+  })
+  .partial()
+  .refine((v) => Object.keys(v).length > 0, "Change at least one field.");
+export type UpdateTransaction = z.input<typeof updateTransactionSchema>;
+
 /** `cardId` narrows a summary to one credit card's charges. */
 export const monthQuerySchema = z.object({ month: monthSchema, cardId: idSchema.optional() });
 
@@ -434,6 +448,31 @@ export const cardAlertSchema = z.object({
   status: z.enum(["due_soon", "overdue"]),
 });
 export type CardAlert = z.infer<typeof cardAlertSchema>;
+
+// Accounts --------------------------------------------------------------------
+
+export const emailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(254, "That email is too long.")
+  .pipe(z.email("Enter an email like you@example.com."));
+
+/** Login: no strength rules here (an old password must still work); register checks those on the server. */
+export const credentialsSchema = z.object({
+  email: emailSchema,
+  password: z.string().min(1, "Enter your password.").max(200, "That password is too long."),
+});
+export type Credentials = z.input<typeof credentialsSchema>;
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Enter your current password.").max(200),
+  newPassword: z.string().min(8, "Use at least 8 characters.").max(200, "Use at most 200 characters."),
+});
+export type ChangePassword = z.input<typeof changePasswordSchema>;
+
+export const userSchema = z.object({ id: z.number().int(), email: z.string() });
+export type User = z.infer<typeof userSchema>;
 
 // Errors ----------------------------------------------------------------------
 

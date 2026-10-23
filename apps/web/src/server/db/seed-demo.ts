@@ -23,7 +23,10 @@ import { categoryColorPresets, colorOwner } from "../../shared/contracts";
 import { createDb } from "./client";
 import { defaultFirstBillingMonth } from "../../shared/installments";
 import { createDrizzleRepositories } from "../repositories/drizzle";
-import { cardPayments, categories, creditCards, installments, transactions, type TransactionType } from "./schema";
+import { hashPassword } from "../auth";
+import { runAsUser } from "../context";
+import { ensureDefaultCategories } from "./defaults";
+import { cardPayments, categories, creditCards, installments, transactions, users, type TransactionType } from "./schema";
 
 const DEMO_NOTE = "Demo data";
 const MONTHS = 6;
@@ -75,26 +78,45 @@ function monthRows(index: number): Row[] {
 }
 
 const db = createDb();
+
+// The demo account owns all demo data. It's created on the first run (or claimed: a database from before
+// accounts already has a placeholder demo@mft.local with an unusable password). The password is printed
+// only when it's set: on creation, for the placeholder, or with --reset-password.
+const DEMO_EMAIL = "demo@mft.local";
+let [demo] = await db.select().from(users).where(eq(users.email, DEMO_EMAIL));
+let demoPassword: string | null = null;
+const newPassword = () => Buffer.from(crypto.getRandomValues(new Uint8Array(12))).toString("base64url");
+if (!demo) {
+  demoPassword = newPassword();
+  [demo] = await db.insert(users).values({ email: DEMO_EMAIL, passwordHash: await hashPassword(demoPassword) }).returning();
+} else if (demo.passwordHash === "!" || process.argv.includes("--reset-password")) {
+  demoPassword = newPassword();
+  await db.update(users).set({ passwordHash: await hashPassword(demoPassword) }).where(eq(users.id, demo.id));
+}
+const userId = demo!.id;
+const repos = createDrizzleRepositories(db);
+await runAsUser(userId, () => ensureDefaultCategories(repos));
+
 // Subcategories: created under their parent if missing (they inherit its color). Kept on re-runs.
 const demoSubcategories: Record<string, string[]> = {
   "Bills & utilities": ["Electric", "Water", "Internet", "Mobile"],
   Transport: ["Fuel", "Grab/Taxi"],
 };
-let all = await db.select().from(categories);
+let all = await db.select().from(categories).where(eq(categories.userId, userId));
 for (const [parentName, subs] of Object.entries(demoSubcategories)) {
   const parent = all.find((c) => c.name === parentName && c.parentId === null);
   if (!parent) continue;
   for (const name of subs) {
     if (!all.some((c) => c.name === name && c.parentId === parent.id)) {
-      await db.insert(categories).values({ name, type: parent.type, color: null, parentId: parent.id });
+      await db.insert(categories).values({ userId, name, type: parent.type, color: null, parentId: parent.id });
     }
   }
 }
-all = await db.select().from(categories);
+all = await db.select().from(categories).where(eq(categories.userId, userId));
 const categoryId = (name: string, parentName?: string) => {
   const parent = parentName ? all.find((c) => c.name === parentName && c.parentId === null) : undefined;
   const found = all.find((c) => c.name === name && c.parentId === (parent?.id ?? null));
-  if (!found) throw new Error(`seed:demo: category "${name}" is missing. Run \`bun run db:seed\` first.`);
+  if (!found) throw new Error(`seed:demo: category "${name}" is missing (it may have been renamed).`);
   return found.id;
 };
 /** Utility bills and rides go to their subcategory; everything else stays on the parent. */
@@ -120,11 +142,11 @@ const demoCards = [
   // Due day 31 exercises short months: September's statement is due on the 30th.
   { name: "Metrobank Visa", issuer: "Metrobank", last4: "0193", limitMinor: 8_000_000, closingDay: 20, dueDay: 31, notifyDays: 3, color: "indigo" },
 ] as const;
-const existingCards = await db.select().from(creditCards);
+const existingCards = await db.select().from(creditCards).where(eq(creditCards.userId, userId));
 for (const card of demoCards) {
   if (existingCards.some((c) => c.name === card.name)) continue;
   const color = !colorOwner(existingCards, card.color) ? card.color : categoryColorPresets.find((k) => !colorOwner(existingCards, k));
-  const [row] = await db.insert(creditCards).values({ ...card, color: color ?? "grey" }).returning();
+  const [row] = await db.insert(creditCards).values({ ...card, userId, color: color ?? "grey" }).returning();
   if (row) existingCards.push(row);
 }
 const cardId = (name: string) => existingCards.find((c) => c.name === name)!.id;
@@ -147,7 +169,7 @@ for (let index = 0; index < MONTHS; index++) {
     if (occurredOn > today) continue; // nothing in the future
     const { category, day: _day, ...rest } = row;
     const card = row.type === "expense" ? cardFor(category, row.description) : null;
-    values.push({ ...rest, categoryId: categoryFor(category, row.description), occurredOn, note: DEMO_NOTE, cardId: card });
+    values.push({ ...rest, userId, categoryId: categoryFor(category, row.description), occurredOn, note: DEMO_NOTE, cardId: card });
   }
 }
 
@@ -162,24 +184,24 @@ const demoPlans = [
   { card: bpi, description: "Sony headphones (Digital Walker)", purchasedOn: monthsAgo(5, 2), principalMinor: 1_799_000, months: 3, addOnRateBps: 0 },
 ];
 db.delete(installments)
-  .where(and(inArray(installments.cardId, [bpi, metrobank]), inArray(installments.description, demoPlans.map((d) => d.description))))
+  .where(and(eq(installments.userId, userId), inArray(installments.cardId, [bpi, metrobank]), inArray(installments.description, demoPlans.map((d) => d.description))))
   .run(); // their generated expenses go too (ON DELETE cascade)
 const planIds: number[] = [];
 for (const { card, ...plan } of demoPlans) {
   const closingDay = existingCards.find((c) => c.id === card)!.closingDay;
   const [row] = db
     .insert(installments)
-    .values({ ...plan, cardId: card, categoryId: categoryId("Shopping"), firstBillingMonth: defaultFirstBillingMonth(plan.purchasedOn, closingDay) })
+    .values({ ...plan, userId, cardId: card, categoryId: categoryId("Shopping"), firstBillingMonth: defaultFirstBillingMonth(plan.purchasedOn, closingDay) })
     .returning({ id: installments.id })
     .all();
   if (row) planIds.push(row.id);
 }
-await createDrizzleRepositories(db).installments.regenerate(planIds, today);
+await runAsUser(userId, () => repos.installments.regenerate(planIds, today));
 
 db.transaction((tx) => {
-  tx.delete(transactions).where(eq(transactions.note, DEMO_NOTE)).run();
+  tx.delete(transactions).where(and(eq(transactions.userId, userId), eq(transactions.note, DEMO_NOTE))).run();
   tx.insert(transactions).values(values).run();
-  tx.delete(cardPayments).where(and(eq(cardPayments.note, DEMO_NOTE), inArray(cardPayments.cardId, [bpi, metrobank]))).run();
+  tx.delete(cardPayments).where(and(eq(cardPayments.userId, userId), eq(cardPayments.note, DEMO_NOTE), inArray(cardPayments.cardId, [bpi, metrobank]))).run();
 
   // Pay each past-due statement in full on its due date, oldest first, so balances carry correctly.
   for (const card of existingCards.filter((c) => c.id === bpi || c.id === metrobank)) {
@@ -193,7 +215,7 @@ db.transaction((tx) => {
         charges.filter((t) => t.occurredOn <= close).reduce((sum, t) => sum + t.amountMinor, 0) -
         payments.filter((p) => p.paidOn <= close).reduce((sum, p) => sum + p.amountMinor, 0);
       if (owed <= 0) continue;
-      const payment = { cardId: card.id, amountMinor: owed, paidOn: due, note: DEMO_NOTE };
+      const payment = { userId, cardId: card.id, amountMinor: owed, paidOn: due, note: DEMO_NOTE };
       tx.insert(cardPayments).values(payment).run();
       payments.push({ ...payment, id: 0, createdAt: new Date() });
     }
@@ -201,3 +223,8 @@ db.transaction((tx) => {
 });
 console.log(`seed:demo: ${demoPlans.length} demo installment plans written`);
 console.log(`seed:demo: ${values.length} demo transactions written (${MONTHS} months up to ${today}); previous demo rows replaced`);
+console.log(
+  demoPassword
+    ? `seed:demo: sign in as ${DEMO_EMAIL} with password ${demoPassword}  (shown once; run with --reset-password for a new one)`
+    : `seed:demo: data belongs to ${DEMO_EMAIL} (password unchanged; run with --reset-password for a new one)`,
+);

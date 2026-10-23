@@ -150,3 +150,10 @@ export const ChevronDownIcon = () => (
     <path d="M5 8l5 5 5-5" />
   </Icon>
 );
+
+export const LogoutIcon = () => (
+  <Icon size={16}>
+    <path d="M12 6V4.5A1.5 1.5 0 0 0 10.5 3h-5A1.5 1.5 0 0 0 4 4.5v11A1.5 1.5 0 0 0 5.5 17h5a1.5 1.5 0 0 0 1.5-1.5V14" />
+    <path d="M9 10h8M14 7l3 3-3 3" />
+  </Icon>
+);

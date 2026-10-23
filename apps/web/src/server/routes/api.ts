@@ -13,6 +13,7 @@ import {
   newTransactionSchema,
   transactionQuerySchema,
   updateCategorySchema,
+  updateTransactionSchema,
   type TransactionType,
 } from "../../shared/contracts";
 import { HttpError, json, readBody, readQuery, route } from "../http";
@@ -196,6 +197,31 @@ export function createApiRoutes(repos: Repositories) {
     },
 
     "/api/transactions/:id": {
+      PATCH: route(async (req: Request & { params: { id: string } }) => {
+        const current = await repos.transactions.findById(idSchema.parse(req.params.id));
+        if (!current) throw new HttpError(404, "That transaction doesn't exist anymore.");
+        if (current.installmentId !== null) {
+          throw new HttpError(409, "This is a billed installment month. Edit the installment plan on its card instead.");
+        }
+        const input = await readBody(req, updateTransactionSchema);
+        if (input.categoryId !== undefined) {
+          const category = await repos.categories.findById(input.categoryId);
+          if (!category) throw new HttpError(400, "Some fields need fixing.", { categoryId: "Choose a category." });
+          if (category.type !== current.type) {
+            throw new HttpError(400, "Some fields need fixing.", { categoryId: `${category.name} is an ${category.type} category.` });
+          }
+        }
+        if (input.cardId !== undefined && input.cardId !== null) {
+          if (current.type !== "expense") throw new HttpError(400, "Some fields need fixing.", { cardId: "Only expenses can be paid with a card." });
+          const card = await repos.cards.findById(input.cardId);
+          // An archived card may stay on a charge it already had, but nothing new goes on it.
+          if (!card || (card.archived && card.id !== current.card?.id)) {
+            throw new HttpError(400, "Some fields need fixing.", { cardId: "Choose one of your active cards, or Cash or debit." });
+          }
+        }
+        return json(await repos.transactions.update(current.id, input));
+      }),
+
       DELETE: route(async (req: Request & { params: { id: string } }) => {
         const id = idSchema.parse(req.params.id);
         const result = await repos.transactions.remove(id);

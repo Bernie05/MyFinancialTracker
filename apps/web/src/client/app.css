@@ -2479,6 +2479,159 @@ mark {
   }
 }
 
+/* ---------- Edit transaction ---------- */
+
+/* A form inside a dialog gets the same side padding as the dialog header. */
+.dialog__body {
+  padding: 0 var(--space-5) var(--space-5);
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* ---------- Sign in / register ---------- */
+
+.auth {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-5);
+  min-height: 100dvh;
+  padding: var(--space-6) var(--space-4);
+}
+
+.auth__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.auth__brand img {
+  border-radius: 12px;
+}
+
+.auth__card {
+  width: min(420px, 100%);
+  padding: var(--space-6) var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.auth__title {
+  margin: 0;
+  font-size: var(--type-title-1-size);
+  line-height: var(--type-title-1-line);
+  font-weight: var(--type-title-1-weight);
+  letter-spacing: var(--type-title-1-tracking);
+}
+
+.auth__subtitle {
+  margin: var(--space-2) 0 var(--space-5);
+  color: var(--ink-muted);
+}
+
+.auth__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.auth__password {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.auth__password .mft-field {
+  align-self: stretch;
+}
+
+.auth__toggle {
+  font-size: var(--type-label-size);
+}
+
+.auth__switch {
+  margin: var(--space-5) 0 0;
+  color: var(--ink-muted);
+  text-align: center;
+}
+
+.auth__switch a {
+  font-weight: 650;
+}
+
+@media (min-width: 640px) {
+  .auth__card {
+    padding: var(--space-7) var(--space-6);
+  }
+}
+
+/* While the session is checked: a blank page in the app's colour, no layout jump. */
+.splash {
+  min-height: 100dvh;
+  background: var(--surface);
+}
+
+/* Signed-in user, bottom of the sidebar. */
+.sidebar__user {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-2) 0;
+  border-top: 1px solid var(--line);
+}
+
+.sidebar__avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: var(--type-label-size);
+  font-weight: 700;
+}
+
+.sidebar__email {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--type-label-size);
+  font-weight: 550;
+}
+
+/* Settings */
+.settings {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 640px;
+}
+
+.settings__email {
+  margin: 0;
+  font-weight: 650;
+}
+
+.settings__ok {
+  margin: 0;
+  color: var(--income);
+  font-weight: 550;
+}
+
 /* ---------- Motion: everything above is transition-only and switches off here. ---------- */
 @media (prefers-reduced-motion: reduce) {
   .sidebar,

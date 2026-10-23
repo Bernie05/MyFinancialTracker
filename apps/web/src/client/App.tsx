@@ -22,7 +22,11 @@ import { PlaceholderPage } from "./layout/PlaceholderPage";
 import { startAddTransaction } from "./layout/quickAdd";
 import { Sidebar, type NavItem } from "./layout/Sidebar";
 import { refreshAlerts } from "./lib/alerts";
-import { usePath } from "./lib/router";
+import { navigate, usePath } from "./lib/router";
+import { goToLogin, loadSession, nextPath, signOut, useSession } from "./lib/session";
+import type { User } from "../shared/contracts";
+import { AuthPage } from "./features/auth/AuthPage";
+import { SettingsPage } from "./features/settings/SettingsPage";
 
 const mainNav: NavItem[] = [
   { path: "/", label: "Dashboard", icon: <DashboardIcon /> },
@@ -55,20 +59,37 @@ const pages: Record<string, ReactNode> = {
   "/reports/expenses": <ExpensesReportPage />,
   "/cards": <CardsPage />,
   "/categories": <CategoriesPage />,
-  "/settings": (
-    <PlaceholderPage
-      title="Settings"
-      icon={<SettingsIcon />}
-      heading="Nothing to change yet"
-      message="Currency and appearance will live here. The app uses Philippine pesos and follows your device's light or dark mode. Category names and colors have their own page."
-      action={{ href: "/categories", label: "Manage categories" }}
-    />
-  ),
+  "/settings": <SettingsPage />,
 };
 
 const allNav = [...mainNav, ...reportNav, ...bottomNav];
 
+/**
+ * The gate: sign-in pages for visitors, a splash while the session is checked, and the app for a signed-in
+ * user. The app is keyed by user id, so switching accounts remounts everything: no data from the previous
+ * account survives on screen.
+ */
 export function App() {
+  const path = usePath();
+  const session = useSession();
+  const authPage = path === "/login" ? "login" : path === "/register" ? "register" : null;
+
+  useEffect(() => {
+    loadSession();
+  }, []);
+
+  useEffect(() => {
+    if (session.status === "signed-out" && !authPage) goToLogin();
+    if (session.status === "signed-in" && authPage) navigate(nextPath(), { replace: true });
+  }, [session.status, authPage]);
+
+  if (authPage && session.status !== "signed-in") return <AuthPage mode={authPage} />;
+  if (session.status !== "signed-in") return <div className="splash" role="status" aria-label="Loading" />;
+  return <Shell key={session.user.id} user={session.user} />;
+}
+
+/** The signed-in app: sidebar, top bar, pages. */
+function Shell({ user }: { user: User }) {
   const path = usePath();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -143,6 +164,8 @@ export function App() {
         onNavigate={() => setMenuOpen(false)}
         onClose={closeMenu}
         closeRef={closeButton}
+        user={user}
+        onSignOut={signOut}
       />
       {menuOpen && <div className="shell__backdrop" onClick={closeMenu} aria-hidden="true" />}
 

@@ -18,6 +18,12 @@ export async function refreshAlerts() {
   listeners.forEach((l) => l());
 }
 
+/** Forget the alerts (sign-out), so the next account never sees the previous one's reminders. */
+export function clearAlerts() {
+  alerts = [];
+  listeners.forEach((l) => l());
+}
+
 export const useAlerts = () =>
   useSyncExternalStore(
     (l) => {

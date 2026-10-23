@@ -14,6 +14,8 @@ interface TransactionListProps {
   transactions: Transaction[];
   /** Called after the user confirms; throw to show the error in the dialog. */
   onDelete: (tx: Transaction) => Promise<void>;
+  /** Opens the edit dialog for a row (not offered on billed installment months). */
+  onEdit?: (tx: Transaction) => void;
 }
 
 /** Extra line on a ledger row: the card it was paid with (if any), then the note. */
@@ -33,7 +35,7 @@ export function transactionMeta(tx: Transaction, showCard = true) {
   );
 }
 
-export function TransactionList({ transactions, onDelete, showCard = true }: TransactionListProps) {
+export function TransactionList({ transactions, onDelete, onEdit, showCard = true }: TransactionListProps) {
   const [confirming, setConfirming] = useState<Transaction | null>(null);
   if (transactions.length === 0) {
     return (
@@ -61,14 +63,16 @@ export function TransactionList({ transactions, onDelete, showCard = true }: Tra
             // Billed installment months are read-only: the plan on the card page manages them.
             action={
               tx.installmentId !== null ? undefined : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setConfirming(tx)}
-                  aria-label={`Delete ${tx.description}`}
-                >
-                  Delete
-                </Button>
+                <span className="row-actions">
+                  {onEdit && (
+                    <Button variant="ghost" size="sm" onClick={() => onEdit(tx)} aria-label={`Edit ${tx.description}`}>
+                      Edit
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={() => setConfirming(tx)} aria-label={`Delete ${tx.description}`}>
+                    Delete
+                  </Button>
+                </span>
               )
             }
           />

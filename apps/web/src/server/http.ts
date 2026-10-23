@@ -1,6 +1,7 @@
 /**
  * Small HTTP helpers: JSON responses, typed errors and one error boundary for every route.
  */
+import type { Server } from "bun";
 import { ZodError, type ZodType } from "zod";
 import type { ApiErrorBody } from "../shared/contracts";
 
@@ -41,10 +42,10 @@ export function readQuery<T>(req: Request, schema: ZodType<T>): T {
  * Wraps a handler so every failure leaves as the same JSON error shape:
  * validation → 400 with per-field messages, HttpError → its status, anything else → 500.
  */
-export function route<R extends Request>(handler: (req: R) => Promise<Response> | Response) {
-  return async (req: R): Promise<Response> => {
+export function route<R extends Request>(handler: (req: R, server: Server<undefined>) => Promise<Response> | Response) {
+  return async (req: R, server: Server<undefined>): Promise<Response> => {
     try {
-      return await handler(req);
+      return await handler(req, server);
     } catch (err) {
       if (err instanceof ZodError) {
         const fields: Record<string, string> = {};

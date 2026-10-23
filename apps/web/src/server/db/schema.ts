@@ -21,10 +21,44 @@ const createdAt = () =>
     .notNull()
     .default(sql`(unixepoch())`);
 
+/** An account. Email is stored lowercased; the password only as an argon2id hash (Bun.password). */
+export const users = sqliteTable(
+  "users",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    email: text("email").notNull(),
+    passwordHash: text("password_hash").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("users_email_unique").on(t.email)],
+);
+
+/**
+ * A signed-in browser. Only a SHA-256 hash of the token is stored, so a leaked database can't be
+ * replayed as sessions. `expiresAt` slides forward while the session is used.
+ */
+export const sessions = sqliteTable(
+  "sessions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("sessions_token_hash_unique").on(t.tokenHash), index("sessions_user_idx").on(t.userId)],
+);
+
 export const categories = sqliteTable(
   "categories",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    /** The owner. Every query is scoped to the signed-in user (see server/context.ts). */
+    userId: integer("user_id")
+      .notNull()
+      .references((): AnySQLiteColumn => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     type: text("type", { enum: transactionTypes }).notNull(),
     /**
@@ -38,11 +72,12 @@ export const categories = sqliteTable(
   },
   (t) => [
     // Names are unique within a parent (top level counts as parent 0).
-    uniqueIndex("categories_name_type_parent_unique").on(t.name, t.type, sql`coalesce(${t.parentId}, 0)`),
+    uniqueIndex("categories_name_type_parent_unique").on(t.userId, t.name, t.type, sql`coalesce(${t.parentId}, 0)`),
     // One color per parent across both types: the dashboard shows them side by side. Subcategories are null.
     // (A custom hex equal to a preset's value is caught in the API, which knows the preset values.)
-    uniqueIndex("categories_color_unique").on(t.color),
+    uniqueIndex("categories_color_unique").on(t.userId, t.color),
     index("categories_parent_idx").on(t.parentId),
+    index("categories_user_idx").on(t.userId),
     check(
       "categories_color_valid",
       sql`${t.color} is null or ${t.color} in ('red','orange','amber','yellow','green','teal','blue','indigo','purple','pink','brown','grey') or ${t.color} glob '#[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]'`,
@@ -60,6 +95,10 @@ export const creditCards = sqliteTable(
   "credit_cards",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    /** The owner. Every query is scoped to the signed-in user (see server/context.ts). */
+    userId: integer("user_id")
+      .notNull()
+      .references((): AnySQLiteColumn => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     issuer: text("issuer"),
     last4: text("last4"),
@@ -73,8 +112,9 @@ export const creditCards = sqliteTable(
     createdAt: createdAt(),
   },
   (t) => [
-    uniqueIndex("credit_cards_name_unique").on(t.name),
-    uniqueIndex("credit_cards_color_unique").on(t.color),
+    uniqueIndex("credit_cards_name_unique").on(t.userId, t.name),
+    index("credit_cards_user_idx").on(t.userId),
+    uniqueIndex("credit_cards_color_unique").on(t.userId, t.color),
     check("credit_cards_last4", sql`${t.last4} is null or ${t.last4} glob '[0-9][0-9][0-9][0-9]'`),
     check("credit_cards_limit_positive", sql`${t.limitMinor} > 0`),
     check("credit_cards_closing_day", sql`${t.closingDay} between 1 and 31`),
@@ -89,6 +129,10 @@ export const cardPayments = sqliteTable(
   "card_payments",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    /** The owner. Every query is scoped to the signed-in user (see server/context.ts). */
+    userId: integer("user_id")
+      .notNull()
+      .references((): AnySQLiteColumn => users.id, { onDelete: "cascade" }),
     cardId: integer("card_id")
       .notNull()
       .references(() => creditCards.id, { onDelete: "cascade" }),
@@ -99,6 +143,7 @@ export const cardPayments = sqliteTable(
   },
   (t) => [
     index("card_payments_card_paid_on_idx").on(t.cardId, t.paidOn),
+    index("card_payments_user_idx").on(t.userId),
     check("card_payments_amount_positive", sql`${t.amountMinor} > 0`),
   ],
 );
@@ -112,6 +157,10 @@ export const installments = sqliteTable(
   "installments",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    /** The owner. Every query is scoped to the signed-in user (see server/context.ts). */
+    userId: integer("user_id")
+      .notNull()
+      .references((): AnySQLiteColumn => users.id, { onDelete: "cascade" }),
     cardId: integer("card_id")
       .notNull()
       .references(() => creditCards.id, { onDelete: "cascade" }),
@@ -134,6 +183,7 @@ export const installments = sqliteTable(
   },
   (t) => [
     index("installments_card_idx").on(t.cardId),
+    index("installments_user_idx").on(t.userId),
     check("installments_principal_positive", sql`${t.principalMinor} > 0`),
     check("installments_months_range", sql`${t.months} between 1 and 60`),
     check("installments_rate_range", sql`${t.addOnRateBps} between 0 and 500`),
@@ -147,6 +197,10 @@ export const transactions = sqliteTable(
   "transactions",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    /** The owner. Every query is scoped to the signed-in user (see server/context.ts). */
+    userId: integer("user_id")
+      .notNull()
+      .references((): AnySQLiteColumn => users.id, { onDelete: "cascade" }),
     type: text("type", { enum: transactionTypes }).notNull(),
     amountMinor: integer("amount_minor").notNull(),
     description: text("description").notNull(),
@@ -164,6 +218,7 @@ export const transactions = sqliteTable(
   },
   (t) => [
     index("transactions_occurred_on_idx").on(t.occurredOn),
+    index("transactions_user_occurred_on_idx").on(t.userId, t.occurredOn),
     index("transactions_category_idx").on(t.categoryId),
     index("transactions_card_occurred_on_idx").on(t.cardId, t.occurredOn),
     // One transaction per billed schedule entry: makes generating them idempotent.
@@ -177,6 +232,10 @@ export const budgets = sqliteTable(
   "budgets",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    /** The owner. Every query is scoped to the signed-in user (see server/context.ts). */
+    userId: integer("user_id")
+      .notNull()
+      .references((): AnySQLiteColumn => users.id, { onDelete: "cascade" }),
     categoryId: integer("category_id")
       .notNull()
       .references(() => categories.id, { onDelete: "cascade" }),
@@ -186,6 +245,7 @@ export const budgets = sqliteTable(
   },
   (t) => [
     uniqueIndex("budgets_category_month_unique").on(t.categoryId, t.month),
+    index("budgets_user_idx").on(t.userId),
     check("budgets_limit_positive", sql`${t.limitMinor} > 0`),
   ],
 );
@@ -194,6 +254,10 @@ export const savingsGoals = sqliteTable(
   "savings_goals",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    /** The owner. Every query is scoped to the signed-in user (see server/context.ts). */
+    userId: integer("user_id")
+      .notNull()
+      .references((): AnySQLiteColumn => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     targetMinor: integer("target_minor").notNull(),
     savedMinor: integer("saved_minor").notNull().default(0),
@@ -201,6 +265,7 @@ export const savingsGoals = sqliteTable(
     createdAt: createdAt(),
   },
   (t) => [
+    index("savings_goals_user_idx").on(t.userId),
     check("savings_goals_target_positive", sql`${t.targetMinor} > 0`),
     check("savings_goals_saved_non_negative", sql`${t.savedMinor} >= 0`),
   ],
@@ -210,6 +275,10 @@ export const debts = sqliteTable(
   "debts",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    /** The owner. Every query is scoped to the signed-in user (see server/context.ts). */
+    userId: integer("user_id")
+      .notNull()
+      .references((): AnySQLiteColumn => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     lender: text("lender"),
     principalMinor: integer("principal_minor").notNull(),
@@ -220,6 +289,7 @@ export const debts = sqliteTable(
     createdAt: createdAt(),
   },
   (t) => [
+    index("debts_user_idx").on(t.userId),
     check("debts_principal_positive", sql`${t.principalMinor} > 0`),
     check("debts_balance_non_negative", sql`${t.balanceMinor} >= 0`),
     check("debts_rate_non_negative", sql`${t.interestRateBps} >= 0`),

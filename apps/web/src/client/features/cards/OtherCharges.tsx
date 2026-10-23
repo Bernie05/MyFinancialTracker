@@ -6,13 +6,14 @@ import { api } from "../../api/endpoints";
 import { ConfirmDialog } from "../../layout/ConfirmDialog";
 import { Dialog } from "../../layout/Dialog";
 import { EmptyState } from "../../layout/EmptyState";
-import { ChevronLeftIcon, ChevronRightIcon, PlusIcon, TrashIcon } from "../../layout/icons";
+import { ChevronLeftIcon, ChevronRightIcon, PencilIcon, PlusIcon, TrashIcon } from "../../layout/icons";
 import { Loadable } from "../../layout/Loadable";
 import { categoryColor } from "../../lib/categoryColor";
 import { shortDate } from "../../lib/dates";
 import { linkClick } from "../../lib/router";
 import { useAsync } from "../../lib/useAsync";
 import { AddTransactionForm } from "../transactions/AddTransactionForm";
+import { EditTransactionDialog } from "../transactions/EditTransactionDialog";
 
 const MAX_BACK = 12; // statements you can step back through
 const LIMIT = 100; // a cycle rarely has more; past that, "View all charges" has the full list
@@ -33,6 +34,7 @@ export function OtherCharges({ card, categories, cards, onChanged }: OtherCharge
   const [back, setBack] = useState(0);
   const [adding, setAdding] = useState(false);
   const [deleting, setDeleting] = useState<Transaction | null>(null);
+  const [editing, setEditing] = useState<Transaction | null>(null);
 
   // Cycle `back` statements ago: (previous close + 1 day) .. close.
   const month = card.summary.cycleTo.slice(0, 7);
@@ -129,6 +131,16 @@ export function OtherCharges({ card, categories, cards, onChanged }: OtherCharge
                               {tx.category.parentId !== null && <Badge category={color}>{tx.category.name}</Badge>}
                             </span>
                             <span className="prow__amount">{formatMoney(tx.amountMinor)}</span>
+                            <span className="row-actions">
+                            <button
+                              type="button"
+                              className="icon-button icon-button--sm"
+                              aria-label={`Edit ${tx.description}`}
+                              title="Edit"
+                              onClick={() => setEditing(tx)}
+                            >
+                              <PencilIcon />
+                            </button>
                             <button
                               type="button"
                               className="icon-button icon-button--sm"
@@ -138,6 +150,7 @@ export function OtherCharges({ card, categories, cards, onChanged }: OtherCharge
                             >
                               <TrashIcon />
                             </button>
+                            </span>
                           </li>
                         ))}
                       </ul>
@@ -160,6 +173,7 @@ export function OtherCharges({ card, categories, cards, onChanged }: OtherCharge
 
       <Dialog open={adding} onClose={() => setAdding(false)} title={`Add a charge to ${card.name}`}>
         {adding && (
+          <div className="dialog__body">
           <AddTransactionForm
             type="expense"
             categories={categories}
@@ -171,8 +185,20 @@ export function OtherCharges({ card, categories, cards, onChanged }: OtherCharge
               changed(message);
             }}
           />
+          </div>
         )}
       </Dialog>
+
+      <EditTransactionDialog
+        transaction={editing}
+        categories={categories}
+        cards={cards}
+        onClose={() => setEditing(null)}
+        onSaved={(message) => {
+          setEditing(null);
+          changed(message);
+        }}
+      />
 
       <ConfirmDialog
         open={deleting !== null}

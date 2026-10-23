@@ -1,7 +1,8 @@
 import logoMark from "@mft/ui/logo-mark.svg";
 import type { ReactNode, Ref } from "react";
 import { linkClick } from "../lib/router";
-import { CloseIcon } from "./icons";
+import type { User } from "../../shared/contracts";
+import { CloseIcon, LogoutIcon } from "./icons";
 
 export interface NavItem {
   path: string;
@@ -20,9 +21,11 @@ interface SidebarProps {
   onNavigate: () => void;
   onClose: () => void;
   closeRef: Ref<HTMLButtonElement>;
+  user: User;
+  onSignOut: () => void;
 }
 
-export function Sidebar({ id, main, reports, bottom, currentPath, open, onNavigate, onClose, closeRef }: SidebarProps) {
+export function Sidebar({ id, main, reports, bottom, currentPath, open, onNavigate, onClose, closeRef, user, onSignOut }: SidebarProps) {
   const link = (item: NavItem) => (
     <li key={item.path}>
       <a
@@ -60,6 +63,19 @@ export function Sidebar({ id, main, reports, bottom, currentPath, open, onNaviga
         </ul>
         <ul className="sidebar__list sidebar__list--bottom">{bottom.map(link)}</ul>
       </nav>
+      {/* Who's signed in, and the way out. */}
+      <div className="sidebar__user">
+        <span className="sidebar__avatar" aria-hidden="true">
+          {user.email.charAt(0).toUpperCase()}
+        </span>
+        <span className="sidebar__email" title={user.email}>
+          <span className="visually-hidden">Signed in as </span>
+          {user.email}
+        </span>
+        <button type="button" className="icon-button icon-button--sm" aria-label="Log out" title="Log out" onClick={onSignOut}>
+          <LogoutIcon />
+        </button>
+      </div>
     </aside>
   );
 }

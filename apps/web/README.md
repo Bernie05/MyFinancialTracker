@@ -8,14 +8,29 @@ The MyFinancialTracker app: a Bun server that serves a React client and a JSON A
 bun install
 bun run db:generate        # drizzle-kit writes ./drizzle/0000_*.sql from schema.ts. Commit it.
 bun run db:migrate         # applies migrations to data/mft.sqlite
-bun run db:seed --sample   # default categories, plus this month's sample transactions
-bun run db:seed:demo       # optional: 6 months of demo data (note "Demo data"); re-running replaces it
+bun run db:seed            # tops up default categories for every account (new accounts get them on sign-up)
+bun run db:seed:demo       # optional: demo account demo@mft.local with 6 months of demo data; prints its password
+                           #   once (re-running replaces the demo rows; --reset-password prints a new one)
 bun run dev                # http://localhost:3000 with hot reload
 ```
 
 From the repo root, `bun run dev` builds `@mft/ui` first, then starts this app.
 
 Environment: `DATABASE_PATH` (default `data/mft.sqlite`) and `PORT` (default `3000`).
+
+## Accounts and security
+
+Everyone signs in; each account sees only its own data.
+
+- **Passwords**: argon2id via `Bun.password`. At least 8 characters; a short list of common passwords is refused. Emails are lowercased.
+- **Sessions**: a random 256-bit token in the `mft_session` cookie (HttpOnly, SameSite=Lax, Secure except on plain-http localhost). Only its SHA-256 hash is stored (`sessions` table). 30-day expiry that slides forward while used; signing in always issues a new token; signing out deletes it; changing the password signs out every other session.
+- **No account enumeration**: a wrong password and an unknown email get the same "Invalid email or password", and take about as long (a dummy hash is checked).
+- **Rate limits** (in memory, per process): sign-in 30 / 15 min per IP and 8 / 15 min per email; sign-up 10 / hour per IP and 5 / hour per email. **Move to Redis or the database before running more than one server instance.**
+- **Per-user data**: every data table has `user_id` (NOT NULL, cascades with the user). The security gate (`src/server/security.ts`) checks the session on every `/api` route except health, sign-up, sign-in and sign-out, then runs the handler as that user (`src/server/context.ts`). Every repository query filters on that user id, and a query that runs without a user throws instead of reading everyone's rows. Someone else's id is "not found": **404, never 403**. Names and colors are unique per user.
+- **CSRF**: SameSite=Lax, plus every state-changing request must carry a JSON body (forms can't) and, when it has an Origin header, come from this origin (403 otherwise).
+- **Headers**: API responses carry `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin` and `Cache-Control: no-store`. The HTML page sets its CSP and referrer policy in `<meta>` tags (Bun can't add headers to the HTML bundle), so **frame-ancestors / X-Frame-Options for the page must be added by the production proxy**.
+- **Existing data**: migration 0006 gives rows from before accounts to a placeholder `demo@mft.local` with an unusable password; `bun run db:seed:demo` sets one and prints it.
+- **Tests**: `bun test` covers password hashing, sessions (expiry, sliding, revocation) and an isolation test: a second user gets 404 on every read, update and delete of the first user's transactions, categories, cards, payments and installments.
 
 ## Architecture
 
@@ -43,6 +58,12 @@ Requests flow one way: **route → repository interface → Drizzle → SQLite**
 
 | Method | Path | Body / query | Returns |
 | --- | --- | --- | --- |
+| POST | `/api/auth/register` | `{ email, password }` | `201 { user }` and the session cookie; `400` weak password; `409` email can't be used; `429` too many attempts |
+| POST | `/api/auth/login` | `{ email, password }` | `200 { user }` and a new session cookie; `401` "Invalid email or password"; `429` |
+| POST | `/api/auth/logout` | `{}` | `204`; deletes the session and clears the cookie |
+| GET | `/api/auth/me` | | `{ user: { id, email } }`, or `401` |
+| POST | `/api/auth/password` | `{ currentPassword, newPassword }` | `204`; other sessions are signed out |
+| PATCH | `/api/transactions/:id` | any of `amountMinor`, `description`, `categoryId`, `occurredOn`, `note`, `cardId` | `Transaction`; `409` for a billed installment month (edit its plan) |
 | GET | `/api/categories` | | `CategoryListItem[]`, flat: each with `parentId` (null = top level), its own `transactionCount`, and `color` (a subcategory reports its parent's) |
 | POST | `/api/categories` | top level `{ name, type, color }`, or subcategory `{ name, type, parentId }` (one level; same type as the parent) | `201 CategoryListItem`; `409` if the name exists under that parent or the color is in use |
 | PATCH | `/api/categories/:id` | any of `name`, `type`, `color`, `parentId` (null = top level; then it needs a color) | `CategoryListItem`; `409` on a name or color clash, a type change while it has transactions or subcategories, or nesting a category that has subcategories |
@@ -74,7 +95,7 @@ Statement math (`src/shared/cardCycle.ts`, tested with `bun test`): a statement 
 - **Pre-termination.** Months closing before the pre-termination date's cycle are billed as usual; the remaining principal is billed in one amount on that cycle's statement (no further add-on interest), and the plan then completes. Record any bank pre-termination fee as a normal expense.
 - **Card summary** adds `installmentMonthlyTotalMinor`, `installmentRemainingMinor` (still to be billed) and `activeInstallments`.
 
-Errors always look like `{ "error": { "message": "…", "fields": { "amountMinor": "…" } } }`.
+All routes except `/api/health` and the three public auth routes need a session (`401` without one). Errors always look like `{ "error": { "message": "…", "fields": { "amountMinor": "…" } } }`.
 
 Categories have one level of subcategories. A subcategory has its parent's type and inherits its color (stored as null); names are unique within a parent. Filtering transactions by a parent includes its subcategories, and summaries roll up to parents. Category `color` is a preset key (`red`, `orange`, `amber`, `yellow`, `green`, `teal`, `blue`, `indigo`, `purple`, `pink`, `brown`, `grey`; each a theme-aware `--cat-*` token in @mft/ui) or a custom `#rrggbb`. A DB CHECK enforces the format, and colors are unique across top-level categories: a unique index on `color`, plus an API check that treats a hex equal to a preset's light value as that preset. POST and PATCH answer `409` naming the category that already uses it.
 

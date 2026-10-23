@@ -10,6 +10,7 @@ import { refreshAlerts } from "../../lib/alerts";
 import { rangeLabel } from "../../lib/dates";
 import { useAsync } from "../../lib/useAsync";
 import { AddTransactionForm } from "./AddTransactionForm";
+import { EditTransactionDialog } from "./EditTransactionDialog";
 import { Pagination } from "./Pagination";
 import { TransactionFilters } from "./TransactionFilters";
 import { TransactionList } from "./TransactionList";
@@ -47,6 +48,8 @@ export function TransactionsPage({ type }: { type: TransactionType }) {
     list.reload();
     refreshAlerts(); // a card expense changes what's owed
   }
+
+  const [editing, setEditing] = useState<Transaction | null>(null);
 
   // Confirmed in the list's dialog; a failure throws back into it.
   async function remove(tx: Transaction) {
@@ -102,7 +105,7 @@ export function TransactionsPage({ type }: { type: TransactionType }) {
                     Try a wider date range or another category.
                   </EmptyState>
                 ) : (
-                  <TransactionList transactions={result.items} onDelete={remove} />
+                  <TransactionList transactions={result.items} onDelete={remove} onEdit={setEditing} />
                 )
               }
             </Loadable>
@@ -124,6 +127,17 @@ export function TransactionsPage({ type }: { type: TransactionType }) {
           )}
         </Card>
       </div>
+
+      <EditTransactionDialog
+        transaction={editing}
+        categories={categories.state.data ?? []}
+        cards={cards.state.data ?? []}
+        onClose={() => setEditing(null)}
+        onSaved={(message) => {
+          setEditing(null);
+          refresh(message);
+        }}
+      />
 
       {/* Screen readers hear the result of each action without moving focus. */}
       <p className="visually-hidden" role="status" aria-live="polite">

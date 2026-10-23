@@ -4,6 +4,9 @@ import {
   cardPaymentSchema,
   cardSummarySchema,
   categoryListItemSchema,
+  userSchema,
+  type ChangePassword,
+  type Credentials,
   installmentDetailSchema,
   monthSummarySchema,
   monthTotalsSchema,
@@ -19,10 +22,18 @@ import {
   type UpdateCard,
   type UpdateCategory,
   type UpdateInstallment,
+  type UpdateTransaction,
 } from "../../shared/contracts";
 import { request } from "./client";
 
 export const api = {
+  // Accounts
+  me: () => request("/api/auth/me", z.object({ user: userSchema })),
+  register: (input: Credentials) => request("/api/auth/register", z.object({ user: userSchema }), { method: "POST", body: JSON.stringify(input) }),
+  login: (input: Credentials) => request("/api/auth/login", z.object({ user: userSchema }), { method: "POST", body: JSON.stringify(input) }),
+  logout: () => request("/api/auth/logout", null, { method: "POST", body: "{}" }),
+  changePassword: (input: ChangePassword) => request("/api/auth/password", null, { method: "POST", body: JSON.stringify(input) }),
+
   listCategories: () => request("/api/categories", z.array(categoryListItemSchema)),
 
   createCategory: (input: NewCategory) =>
@@ -52,6 +63,10 @@ export const api = {
 
   createTransaction: (input: NewTransaction) =>
     request("/api/transactions", transactionSchema, { method: "POST", body: JSON.stringify(input) }),
+
+  /** Not for billed installment months (409): those are managed by their plan. */
+  updateTransaction: (id: number, input: UpdateTransaction) =>
+    request(`/api/transactions/${id}`, transactionSchema, { method: "PATCH", body: JSON.stringify(input) }),
 
   deleteTransaction: (id: number) => request(`/api/transactions/${id}`, null, { method: "DELETE" }),
 

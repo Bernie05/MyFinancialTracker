@@ -18,6 +18,7 @@ import {
   type CardSummary,
   type InstallmentDetail,
 } from "../../shared/contracts";
+import { currentUserId } from "../context";
 import { HttpError, json, readBody, route } from "../http";
 import type { InstallmentRow, Repositories } from "../repositories/types";
 
@@ -29,16 +30,17 @@ export function todayLocal() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-let syncedOn = "";
+const syncedOn = new Map<number, string>(); // per user: the day their plans were last synced
 /**
  * Billed installment months are generated as expenses. Each read that depends on them calls this; it only
  * does work once per day (a new statement may have closed). Writes to plans regenerate directly.
  */
 export async function ensureInstallmentsSynced(repos: Repositories) {
   const today = todayLocal();
-  if (syncedOn === today) return;
+  const userId = currentUserId();
+  if (syncedOn.get(userId) === today) return;
   await repos.installments.sync(today);
-  syncedOn = today;
+  syncedOn.set(userId, today);
 }
 
 /** A stored plan plus everything derived from its schedule. */

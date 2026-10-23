@@ -1,14 +1,17 @@
-import { Amount, Button, Card, formatMoney, StatTile, TransactionRow, type StatTrend } from "@mft/ui";
+import { Amount, Button, Card, formatMoney, StatTile, type StatTrend } from "@mft/ui";
+import { useState } from "react";
+import type { Transaction } from "../../../shared/contracts";
 import { api } from "../../api/endpoints";
 import { AlertBanner } from "../../layout/AlertBanner";
 import { EmptyState } from "../../layout/EmptyState";
-import { transactionMeta } from "../transactions/TransactionList";
+import { EditTransactionDialog } from "../transactions/EditTransactionDialog";
+import { TransactionList } from "../transactions/TransactionList";
 import { ExpensesIcon, IncomeIcon, PlusIcon } from "../../layout/icons";
 import { Loadable, Skeleton } from "../../layout/Loadable";
 import { PageHeader } from "../../layout/PageHeader";
 import { startAddTransaction } from "../../layout/quickAdd";
-import { categoryColor } from "../../lib/categoryColor";
-import { currentMonth, monthLabel, presetRange, shiftMonth, shortDate, shortMonth } from "../../lib/dates";
+import { refreshAlerts } from "../../lib/alerts";
+import { currentMonth, monthLabel, presetRange, shiftMonth, shortMonth } from "../../lib/dates";
 import { linkClick } from "../../lib/router";
 import { useAsync } from "../../lib/useAsync";
 import { CategoryBars } from "../charts/CategoryBars";
@@ -43,6 +46,23 @@ export function DashboardPage() {
   const summary = useAsync(() => api.getSummary(month), [month]);
   const monthly = useAsync(() => api.getMonthly(month, 6), [month]);
   const recent = useAsync(() => api.listTransactions({ ...presetRange("month"), pageSize: RECENT }), [month]);
+
+  const categories = useAsync(() => api.listCategories(), []);
+  const cards = useAsync(() => api.listCards(), []);
+  const [editing, setEditing] = useState<Transaction | null>(null);
+
+  // An edit or delete can move totals, the chart, the category split and card reminders.
+  function changed() {
+    summary.reload();
+    monthly.reload();
+    recent.reload();
+    refreshAlerts();
+  }
+
+  async function removeTransaction(tx: Transaction) {
+    await api.deleteTransaction(tx.id);
+    changed();
+  }
 
   const totals = summary.state.data;
   const previous = monthly.state.data?.find((r) => r.month === prevMonth);
@@ -173,25 +193,23 @@ export function DashboardPage() {
                   <Button variant="secondary" size="sm" onClick={startAddTransaction}>Add transaction</Button>
                 } />
               ) : (
-                <ul className="tx-list">
-                  {txs.map((tx) => (
-                    <li key={tx.id}>
-                      <TransactionRow
-                        description={tx.description}
-                        category={tx.category.name}
-                        categoryColor={categoryColor(tx.category.color)}
-                        date={shortDate(tx.occurredOn)}
-                        minorUnits={tx.type === "expense" ? -tx.amountMinor : tx.amountMinor}
-                        meta={tx.card ? transactionMeta(tx) : undefined}
-                      />
-                    </li>
-                  ))}
-                </ul>
+                <TransactionList transactions={txs} onEdit={setEditing} onDelete={removeTransaction} />
               )
             }
           </Loadable>
         </Card>
       </div>
+
+      <EditTransactionDialog
+        transaction={editing}
+        categories={categories.state.data ?? []}
+        cards={cards.state.data ?? []}
+        onClose={() => setEditing(null)}
+        onSaved={() => {
+          setEditing(null);
+          changed();
+        }}
+      />
     </div>
   );
 }
