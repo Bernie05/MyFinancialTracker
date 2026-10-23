@@ -15,6 +15,12 @@ export class ApiError extends Error {
   }
 }
 
+/** Called when a signed-in-only request answers 401 (session ended): the app sends you to /login. */
+let onUnauthorized: (() => void) | null = null;
+export const setUnauthorizedHandler = (fn: () => void) => {
+  onUnauthorized = fn;
+};
+
 export async function request<T>(path: string, schema: ZodType<T> | null, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
@@ -27,6 +33,8 @@ export async function request<T>(path: string, schema: ZodType<T> | null, init?:
   }
 
   if (!res.ok) {
+    // The auth endpoints answer 401 for a wrong password: that's a form error, not a lost session.
+    if (res.status === 401 && !path.startsWith("/api/auth/")) onUnauthorized?.();
     const body = apiErrorSchema.safeParse(await res.json().catch(() => null));
     throw body.success
       ? new ApiError(res.status, body.data.error.message, body.data.error.fields)

@@ -1,43 +1,49 @@
-import { Button, SegmentedControl, TextField } from "@mft/ui";
-import { useId, useMemo, useState, type FormEvent } from "react";
-import { newTransactionSchema, type Category, type TransactionType } from "../../../shared/contracts";
+import { Button, Select, TextField } from "@mft/ui";
+import { useMemo, useState, type FormEvent } from "react";
+import { newTransactionSchema, type Card, type Category, type Transaction, type TransactionType } from "../../../shared/contracts";
 import { ApiError } from "../../api/client";
 import { api } from "../../api/endpoints";
+import { ColorDot } from "../../layout/ColorDot";
+import { categoryColor } from "../../lib/categoryColor";
+import { categoryOptions } from "../../lib/categoryOptions";
 import { todayLocal } from "../../lib/dates";
 import { parseAmountToMinor } from "../../lib/parseAmount";
 
 interface AddTransactionFormProps {
+  /** The page decides the type: Expenses adds expenses, Income adds income. */
+  type: TransactionType;
   categories: Category[];
+  /** Active credit cards for "Paid with" (expenses only). */
+  cards?: Card[];
+  /** Start with this card under "Paid with" (e.g. "Add charge" on a card page). */
+  defaultCardId?: number;
+  /** Edit this transaction instead of adding one: fields start filled in, and saving updates it. */
+  transaction?: Transaction;
   /** Called after a successful save, so the page can refresh its lists. */
   onAdded: (message: string) => void;
 }
 
-type FieldErrors = Partial<Record<"amountMinor" | "description" | "categoryId" | "occurredOn", string>>;
+type FieldErrors = Partial<Record<"amountMinor" | "description" | "categoryId" | "occurredOn" | "note" | "cardId", string>>;
 
-const typeOptions = [
-  { value: "expense", label: "Expense" },
-  { value: "income", label: "Income" },
-] as const;
-
-export function AddTransactionForm({ categories, onAdded }: AddTransactionFormProps) {
-  const [type, setType] = useState<TransactionType>("expense");
-  const [amountText, setAmountText] = useState("");
-  const [description, setDescription] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [occurredOn, setOccurredOn] = useState(todayLocal);
+/** Adds a transaction, or edits one when `transaction` is given (same fields, same validation). */
+export function AddTransactionForm({ type, categories, cards = [], defaultCardId, transaction: tx, onAdded }: AddTransactionFormProps) {
+  const [amountText, setAmountText] = useState(tx ? (tx.amountMinor / 100).toFixed(2) : "");
+  const [description, setDescription] = useState(tx?.description ?? "");
+  const [categoryId, setCategoryId] = useState(tx ? String(tx.category.id) : "");
+  const [occurredOn, setOccurredOn] = useState(tx?.occurredOn ?? todayLocal());
+  const [note, setNote] = useState(tx?.note ?? "");
+  // "" = cash or debit, else a card id.
+  const [paidWith, setPaidWith] = useState(tx?.card ? String(tx.card.id) : defaultCardId ? String(defaultCardId) : "");
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const selectId = useId();
 
   const options = useMemo(() => categories.filter((c) => c.type === type), [categories, type]);
   const noun = type === "expense" ? "expense" : "income";
-
-  function changeType(next: TransactionType) {
-    setType(next);
-    setCategoryId(""); // a category belongs to one type; don't carry it across
-    setErrors({});
-  }
+  const selectedCategory = options.find((c) => String(c.id) === categoryId);
+  // An edited charge may sit on a card that's since been archived: keep it selectable.
+  const cardChoices = tx?.card && !cards.some((c) => c.id === tx.card!.id) ? [...cards, { ...tx.card } as Card] : cards;
+  const selectedCard = cardChoices.find((c) => String(c.id) === paidWith);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -51,6 +57,8 @@ export function AddTransactionForm({ categories, onAdded }: AddTransactionFormPr
       description,
       categoryId: Number(categoryId) || 0,
       occurredOn,
+      note,
+      cardId: type === "expense" && paidWith ? Number(paidWith) : null,
     });
 
     if (!parsed.success || amountMinor === null) {
@@ -67,10 +75,17 @@ export function AddTransactionForm({ categories, onAdded }: AddTransactionFormPr
     setErrors({});
     setSaving(true);
     try {
-      await api.createTransaction(parsed.data);
-      setAmountText("");
-      setDescription("");
-      onAdded(type === "expense" ? "Expense added" : "Income added");
+      if (tx) {
+        const { type: _type, ...changes } = parsed.data;
+        await api.updateTransaction(tx.id, changes);
+        onAdded(`${parsed.data.description} saved`);
+      } else {
+        await api.createTransaction(parsed.data);
+        setAmountText("");
+        setDescription("");
+        setNote("");
+        onAdded(type === "expense" ? "Expense added" : "Income added");
+      }
     } catch (err) {
       if (err instanceof ApiError) {
         setErrors(err.fields as FieldErrors);
@@ -85,10 +100,9 @@ export function AddTransactionForm({ categories, onAdded }: AddTransactionFormPr
 
   return (
     <form className="add-form" onSubmit={onSubmit} noValidate>
-      <SegmentedControl aria-label="Transaction type" options={typeOptions} value={type} onChange={changeType} />
-
       <div className="add-form__grid">
         <TextField
+          id={tx ? undefined : "add-amount"}
           label="Amount"
           prefix="₱"
           inputMode="decimal"
@@ -97,6 +111,7 @@ export function AddTransactionForm({ categories, onAdded }: AddTransactionFormPr
           value={amountText}
           onChange={(e) => setAmountText(e.target.value)}
           error={errors.amountMinor}
+          data-autofocus
         />
         <TextField
           label="Date"
@@ -116,25 +131,30 @@ export function AddTransactionForm({ categories, onAdded }: AddTransactionFormPr
         error={errors.description}
       />
 
-      {/* Native select styled with tokens; a design-system Select is a planned addition. */}
-      <div className={`app-select${errors.categoryId ? " app-select--error" : ""}`}>
-        <label htmlFor={selectId}>Category</label>
-        <select
-          id={selectId}
-          value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-          aria-invalid={errors.categoryId ? true : undefined}
-          aria-describedby={errors.categoryId ? `${selectId}-error` : undefined}
-        >
-          <option value="">Choose a category</option>
-          {options.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        {errors.categoryId && <p id={`${selectId}-error`}>{errors.categoryId}</p>}
-      </div>
+      <Select
+        label="Category"
+        value={categoryId}
+        prefix={selectedCategory && <ColorDot color={categoryColor(selectedCategory.color)} />}
+        onChange={(e) => setCategoryId(e.target.value)}
+        error={errors.categoryId}
+        options={[{ value: "", label: "Choose a category" }, ...categoryOptions(categories, type)]}
+      />
+
+      {type === "expense" && cardChoices.length > 0 && (
+        <Select
+          label="Paid with"
+          value={paidWith}
+          onChange={(e) => setPaidWith(e.target.value)}
+          error={errors.cardId}
+          prefix={selectedCard && <ColorDot color={categoryColor(selectedCard.color)} />}
+          options={[
+            { value: "", label: "Cash or debit" },
+            ...cardChoices.map((c) => ({ value: String(c.id), label: c.last4 ? `${c.name} ••${c.last4}` : c.name })),
+          ]}
+        />
+      )}
+
+      <TextField label="Note" hint="Optional" maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} error={errors.note} />
 
       {formError && (
         <p className="add-form__error" role="alert">
@@ -143,7 +163,7 @@ export function AddTransactionForm({ categories, onAdded }: AddTransactionFormPr
       )}
 
       <Button type="submit" loading={saving} fullWidth>
-        Add {noun}
+        {tx ? "Save changes" : `Add ${noun}`}
       </Button>
     </form>
   );

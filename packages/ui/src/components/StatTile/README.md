@@ -5,6 +5,7 @@ One headline figure with its label and an optional trend line. Lay several out i
 ## What you provide
 
 - `label`: what the number is ("Spent this month", "Net worth").
+- `value`: a non-money figure ("67%", "22") in the same style; replaces the amount.
 - `minorUnits`, `currency`, `locale`: as in Amount.
 - `size`: `lg` (default) or `display` for the screen's single hero figure.
 - `trend` (optional): `{ direction: "up" | "down" | "flat", sentiment: "positive" | "negative" | "neutral", text }`.

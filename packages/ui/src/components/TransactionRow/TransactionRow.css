@@ -1,12 +1,31 @@
 .mft-txn {
+  --mft-txn-hue: var(--ink-muted);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   column-gap: var(--space-3);
   padding: var(--space-3) var(--space-5);
   border-top: 1px solid var(--line);
   font-family: var(--font-sans);
   color: var(--ink);
+  transition: background-color 120ms ease;
+}
+
+.mft-txn:hover {
+  background: color-mix(in srgb, var(--surface-sunken) 55%, transparent);
+}
+
+/* Monogram well tinted with the category color; the letter stays in ink for contrast. */
+.mft-txn__avatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--mft-txn-hue) 18%, var(--surface-raised));
+  color: var(--ink);
+  font-size: var(--type-body-size);
+  font-weight: 650;
 }
 
 .mft-txn__main {
@@ -20,7 +39,7 @@
   white-space: nowrap;
   font-size: var(--type-body-size);
   line-height: var(--type-body-line);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .mft-txn__meta {
@@ -38,8 +57,29 @@
   text-align: right;
 }
 
+/* Phones: the action drops under the amount so the description keeps its width. */
 @media (max-width: 480px) {
   .mft-txn {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: var(--space-3);
     padding: var(--space-3) var(--space-4);
+  }
+  .mft-txn__avatar,
+  .mft-txn__main {
+    grid-row: 1 / span 2;
+  }
+  .mft-txn__action {
+    grid-column: 3;
+    justify-self: end;
+  }
+  .mft-txn__avatar {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mft-txn {
+    transition: none;
   }
 }

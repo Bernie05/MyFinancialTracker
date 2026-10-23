@@ -1,6 +1,7 @@
 /**
  * Small HTTP helpers: JSON responses, typed errors and one error boundary for every route.
  */
+import type { Server } from "bun";
 import { ZodError, type ZodType } from "zod";
 import type { ApiErrorBody } from "../shared/contracts";
 
@@ -41,10 +42,10 @@ export function readQuery<T>(req: Request, schema: ZodType<T>): T {
  * Wraps a handler so every failure leaves as the same JSON error shape:
  * validation → 400 with per-field messages, HttpError → its status, anything else → 500.
  */
-export function route<R extends Request>(handler: (req: R) => Promise<Response> | Response) {
-  return async (req: R): Promise<Response> => {
+export function route<R extends Request>(handler: (req: R, server: Server<undefined>) => Promise<Response> | Response) {
+  return async (req: R, server: Server<undefined>): Promise<Response> => {
     try {
-      return await handler(req);
+      return await handler(req, server);
     } catch (err) {
       if (err instanceof ZodError) {
         const fields: Record<string, string> = {};
@@ -55,7 +56,10 @@ export function route<R extends Request>(handler: (req: R) => Promise<Response> 
         return errorResponse(400, "Some fields need fixing.", fields);
       }
       if (err instanceof HttpError) return errorResponse(err.status, err.message, err.fields);
-      console.error(err);
+      // Route and a short reason only: Drizzle errors carry the bound parameters (hashes, emails) after the
+      // first line, so log the driver's own message (the cause) or just the first line.
+      const reason = err instanceof Error ? (err.cause instanceof Error ? err.cause.message : err.message.split("\n")[0]) : "unknown error";
+      console.error(`500 ${req.method} ${new URL(req.url).pathname}: ${reason}`);
       return errorResponse(500, "Something went wrong on our side. Try again.");
     }
   };

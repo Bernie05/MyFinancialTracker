@@ -1,8 +1,13 @@
+/* A stat tile is its own small surface: label on top, the figure big and tight below. */
 .mft-stat {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
   min-width: 0;
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface-raised);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
   font-family: var(--font-sans);
   color: var(--ink);
 }
@@ -20,14 +25,34 @@
   line-height: var(--type-body-line);
 }
 
+/* Non-money figures borrow the Amount size classes. */
+.mft-stat__value {
+  margin: 0;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.mft-stat__value.mft-amount--lg {
+  font-size: var(--type-amount-size);
+  line-height: var(--type-amount-line);
+  font-weight: var(--type-amount-weight);
+  letter-spacing: var(--type-amount-tracking);
+}
+
+.mft-stat__value.mft-amount--display {
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-weight: var(--type-display-weight);
+  letter-spacing: var(--type-display-tracking);
+}
+
 .mft-stat__trend {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  margin: var(--space-1) 0 0;
+  margin: 0;
   font-size: var(--type-caption-size);
   line-height: var(--type-caption-line);
-  font-weight: 500;
+  font-weight: 550;
 }
 
 .mft-stat__trend > svg {

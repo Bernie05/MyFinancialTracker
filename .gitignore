@@ -1,7 +1,71 @@
+# --- Secrets & credentials ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+id_rsa*
+id_ed25519*
+*.keystore
+*.jks
+credentials*.json
+service-account*.json
+secrets.*
+*.secret
+.npmrc
+.pypirc
+.netrc
+
+# --- Local tool / cloud config (may hold tokens) ---
+.vercel/
+.netlify/
+.firebase/
+.supabase/
+supabase/.temp/
+.terraform/
+*.tfstate
+*.tfstate.*
+.aws/
+.claude/settings.local.json
+
+# --- Logs, dumps & local data ---
+*.log
+logs/
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.dump
+*.sql.gz
+
+# --- OS & editor ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+
+# --- Node / Bun ---
 node_modules/
 dist/
+build/
+out/
+.cache/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+
+# --- Playwright / tests ---
+test-results/
+playwright-report/
+playwright/.cache/
+
+# --- Generated ---
 /design-system-export/
-*.log
-.DS_Store
-.env*
-!.env.example

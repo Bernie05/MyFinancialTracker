@@ -18,8 +18,10 @@ export interface StatTrend {
 export interface StatTileProps extends HTMLAttributes<HTMLDivElement> {
   /** What the number is: "Spent this month", "Saved", "Net worth". */
   label: string;
-  /** Integer minor units. */
-  minorUnits: number;
+  /** Integer minor units. Ignored when `value` is given. */
+  minorUnits?: number;
+  /** A non-money figure ("67%", "22") set in the same amount style. */
+  value?: ReactNode;
   currency?: string;
   locale?: string;
   /** Optional change line with an arrow, so the trend never rests on color alone. */
@@ -33,7 +35,8 @@ const trendIcon = { up: ArrowUpRight, down: ArrowDownRight, flat: Minus };
 /** One headline figure with its label and an optional trend. Lay several out in a row on the dashboard. */
 export function StatTile({
   label,
-  minorUnits,
+  minorUnits = 0,
+  value,
   currency,
   locale,
   trend,
@@ -45,7 +48,11 @@ export function StatTile({
   return (
     <div className={cx("mft-stat", `mft-stat--${size}`, className)} {...rest}>
       <p className="mft-stat__label">{label}</p>
-      <Amount minorUnits={minorUnits} currency={currency} locale={locale} size={size} tone="neutral" />
+      {value != null ? (
+        <p className={cx("mft-stat__value", `mft-amount--${size}`)}>{value}</p>
+      ) : (
+        <Amount minorUnits={minorUnits} currency={currency} locale={locale} size={size} tone="neutral" />
+      )}
       {trend && Icon && (
         <p className={cx("mft-stat__trend", `mft-stat__trend--${trend.sentiment}`)}>
           <Icon />

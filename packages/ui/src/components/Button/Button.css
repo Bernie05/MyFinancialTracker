@@ -5,30 +5,35 @@
   justify-content: center;
   gap: var(--space-2);
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   font-family: var(--font-sans);
   font-weight: 600;
+  letter-spacing: -0.005em;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease;
+  transition: background-color 140ms ease, border-color 140ms ease, transform 100ms ease;
 }
 
 .mft-button--md {
-  min-height: 40px;
-  padding: 0 var(--space-4);
+  min-height: 44px;
+  padding: 0 var(--space-5);
   font-size: var(--type-body-size);
   line-height: var(--type-body-line);
 }
 
 .mft-button--sm {
-  min-height: 32px;
-  padding: 0 var(--space-3);
+  min-height: 34px;
+  padding: 0 var(--space-4);
   font-size: var(--type-label-size);
   line-height: var(--type-label-line);
 }
 
 .mft-button--full {
   width: 100%;
+}
+
+.mft-button:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .mft-button:focus-visible {
@@ -38,7 +43,7 @@
 
 .mft-button:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
 .mft-button--loading:disabled {
@@ -48,11 +53,11 @@
 
 /* Variants */
 .mft-button--primary {
-  background: var(--pine);
-  color: var(--on-pine);
+  background: var(--accent);
+  color: var(--on-accent);
 }
 .mft-button--primary:hover:not(:disabled) {
-  background: var(--pine-hover);
+  background: var(--accent-hover);
 }
 
 .mft-button--secondary {
@@ -66,10 +71,10 @@
 
 .mft-button--ghost {
   background: transparent;
-  color: var(--pine);
+  color: var(--accent);
 }
 .mft-button--ghost:hover:not(:disabled) {
-  background: var(--pine-soft);
+  background: var(--accent-soft);
 }
 
 .mft-button--danger {
@@ -82,8 +87,8 @@
 
 .mft-button__icon {
   display: inline-flex;
-  width: 1.1em;
-  height: 1.1em;
+  width: 1.15em;
+  height: 1.15em;
 }
 .mft-button__icon > svg {
   width: 100%;
@@ -115,6 +120,9 @@
 @media (prefers-reduced-motion: reduce) {
   .mft-button {
     transition: none;
+  }
+  .mft-button:active:not(:disabled) {
+    transform: none;
   }
   .mft-button__spinner {
     animation-duration: 2s;

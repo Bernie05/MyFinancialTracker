@@ -3,6 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      Bun can't add response headers to this document, so its CSP and referrer policy are set here.
+      The sha256 allows only the small inline script Bun's dev server injects (bundle unload beacon).
+      Fonts are data: because Bun inlines the woff files into the CSS.
+      frame-ancestors / X-Frame-Options can't be set from a meta tag: add them at the production proxy.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'sha256-ES8VF47udzjVFFPh4RhgcgjUrADRd1Ef0GD9UagS2mY='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+    />
+    <meta name="referrer" content="same-origin" />
     <title>MyFinancialTracker</title>
     <link rel="icon" href="../../../../packages/ui/assets/logo-mark.svg" type="image/svg+xml" />
   </head>

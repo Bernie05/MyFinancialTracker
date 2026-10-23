@@ -1,22 +1,22 @@
 /* MyFinancialTracker type scale — generated from src/tokens/tokens.ts. Do not edit by hand. */
 
 :root {
-  --type-display-size: 44px;
-  --type-display-line: 48px;
+  --type-display-size: 48px;
+  --type-display-line: 52px;
   --type-display-weight: 700;
-  --type-display-tracking: -0.02em;
-  --type-title-1-size: 28px;
-  --type-title-1-line: 34px;
-  --type-title-1-weight: 650;
-  --type-title-1-tracking: -0.01em;
-  --type-title-2-size: 20px;
-  --type-title-2-line: 26px;
-  --type-title-2-weight: 600;
-  --type-title-2-tracking: 0;
-  --type-amount-size: 24px;
-  --type-amount-line: 30px;
-  --type-amount-weight: 650;
-  --type-amount-tracking: -0.01em;
+  --type-display-tracking: -0.035em;
+  --type-title-1-size: 30px;
+  --type-title-1-line: 36px;
+  --type-title-1-weight: 700;
+  --type-title-1-tracking: -0.025em;
+  --type-title-2-size: 17px;
+  --type-title-2-line: 24px;
+  --type-title-2-weight: 650;
+  --type-title-2-tracking: -0.01em;
+  --type-amount-size: 26px;
+  --type-amount-line: 32px;
+  --type-amount-weight: 700;
+  --type-amount-tracking: -0.025em;
   --type-body-size: 15px;
   --type-body-line: 22px;
   --type-body-weight: 400;
@@ -27,11 +27,11 @@
   --type-body-strong-tracking: 0;
   --type-label-size: 13px;
   --type-label-line: 18px;
-  --type-label-weight: 500;
+  --type-label-weight: 550;
   --type-label-tracking: 0;
   --type-caption-size: 12px;
   --type-caption-line: 16px;
-  --type-caption-weight: 400;
+  --type-caption-weight: 450;
   --type-caption-tracking: 0;
 }
 
