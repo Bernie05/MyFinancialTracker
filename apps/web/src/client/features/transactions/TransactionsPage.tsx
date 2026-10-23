@@ -31,7 +31,7 @@ export function TransactionsPage({ type }: { type: TransactionType }) {
   const categories = useAsync(() => api.listCategories(), []);
   const cards = useAsync(() => api.listCards(), []);
   const list = useAsync(
-    () => api.listTransactions({ type, from, to, categoryId, cardId, q, page, pageSize }),
+    (signal) => api.listTransactions({ type, from, to, categoryId, cardId, q, page, pageSize }, signal),
     [type, from, to, categoryId, cardId, q, page, pageSize],
   );
 
@@ -80,7 +80,8 @@ export function TransactionsPage({ type }: { type: TransactionType }) {
               categories={categories.state.data ?? []}
               cardName={cardId ? cards.state.data?.find((c) => c.id === cardId)?.name : undefined}
             />
-            {data && data.total > 0 && (
+            {/* Kept for empty results too (disabled), so stepping into an empty month doesn't move the list. */}
+            {data && (
               <Pagination
                 page={data.page}
                 pageSize={data.pageSize}

@@ -49,7 +49,8 @@ function csrfProblem(req: Request): Response | null {
  * Wraps every handler of every API route. `publicPaths` skip the session check (login, register,
  * logout, health); they still get the CSRF check and headers.
  */
-export function protect(routes: Record<string, MethodHandlers>, auth: AuthStore, publicPaths: string[]) {
+/** `devUserId` (development only, REQUIRE_LOGIN = false): requests without a valid session act as this user. */
+export function protect(routes: Record<string, MethodHandlers>, auth: AuthStore, publicPaths: string[], devUserId?: number) {
   const wrapped: Record<string, MethodHandlers> = {};
   for (const [path, methods] of Object.entries(routes)) {
     const isPublic = publicPaths.includes(path);
@@ -62,6 +63,9 @@ export function protect(routes: Record<string, MethodHandlers>, auth: AuthStore,
 
         const token = readSessionToken(req);
         const session = token ? await auth.findSession(token) : null;
+        if ((!session || !token) && devUserId !== undefined) {
+          return withSecurityHeaders(await runAsUser(devUserId, () => handler(req, server)));
+        }
         if (!session || !token) {
           const res = fail(401, "Sign in to continue.");
           if (token) {

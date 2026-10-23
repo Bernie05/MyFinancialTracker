@@ -177,8 +177,24 @@ function createTransactionRepository(db: Db): TransactionRepository {
           .from(transactions)
           .where(where),
       ]);
+      // A day split across pages still gets its full count and net in the day header.
+      const dates = [...new Set(items.map((t) => t.occurredOn))];
+      const days = dates.length
+        ? await db
+            .select({
+              date: transactions.occurredOn,
+              count: sql<number>`count(*)`,
+              incomeMinor: sql<number>`coalesce(sum(case when ${transactions.type} = 'income' then ${transactions.amountMinor} end), 0)`,
+              expenseMinor: sql<number>`coalesce(sum(case when ${transactions.type} = 'expense' then ${transactions.amountMinor} end), 0)`,
+            })
+            .from(transactions)
+            .where(and(where, inArray(transactions.occurredOn, dates)))
+            .groupBy(transactions.occurredOn)
+            .orderBy(desc(transactions.occurredOn))
+        : [];
       return {
         items: items as Transaction[],
+        days,
         total: agg?.total ?? 0,
         page,
         pageSize,

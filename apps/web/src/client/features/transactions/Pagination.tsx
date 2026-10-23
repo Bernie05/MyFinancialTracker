@@ -18,7 +18,13 @@ export function Pagination({ page, pageSize, total, onChange }: PaginationProps)
   return (
     <nav className="pager" aria-label="Pages">
       <p className="pager__status">
-        <strong>{first}–{last}</strong> of {total}
+        {total === 0 ? (
+          <strong>0 transactions</strong>
+        ) : (
+          <>
+            <strong>{first}–{last}</strong> of {total}
+          </>
+        )}
         <span className="pager__page">Page {page} of {pages}</span>
       </p>
       <div className="pager__controls">

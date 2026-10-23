@@ -218,6 +218,8 @@ export const transactionPageSchema = z.object({
   /** Sums over every matching row, not just this page. */
   incomeMinor: z.number().int(),
   expenseMinor: z.number().int(),
+  /** Per-day totals (over every matching row) for each date that appears on this page, newest first. */
+  days: z.array(z.object({ date: z.string(), count: z.number().int(), incomeMinor: z.number().int(), expenseMinor: z.number().int() })),
 });
 export type TransactionPage = z.infer<typeof transactionPageSchema>;
 

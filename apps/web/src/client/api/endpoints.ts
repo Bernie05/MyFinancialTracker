@@ -56,10 +56,10 @@ export const api = {
   },
 
   /** Filtered, paginated transactions. Unset filters are left out of the query. */
-  listTransactions: (filters: TransactionFilters) => {
+  listTransactions: (filters: TransactionFilters, signal?: AbortSignal) => {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) if (value !== undefined && value !== "") params.set(key, String(value));
-    return request(`/api/transactions?${params}`, transactionPageSchema);
+    return request(`/api/transactions?${params}`, transactionPageSchema, { signal });
   },
 
   createTransaction: (input: NewTransaction) =>

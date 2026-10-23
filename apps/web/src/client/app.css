@@ -511,6 +511,194 @@ a {
   font-weight: 650;
 }
 
+/* ---------- Recent transactions (Dashboard) ---------- */
+
+.recent .mft-card__header {
+  flex-wrap: wrap;
+}
+
+.recent__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  padding: 0 var(--space-5) var(--space-3);
+}
+
+.recent__dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  gap: var(--space-3);
+  flex: 1 1 320px;
+}
+
+/* "From" / "To" sit inside the field (prefix); the top label stays for screen readers only. */
+.recent__dates .mft-field__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.recent__dates .mft-field__affix {
+  color: var(--ink-muted);
+  font-size: var(--type-label-size);
+}
+
+.recent__error {
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  color: var(--expense);
+}
+
+.day-group + .day-group {
+  border-top: 1px solid var(--line);
+}
+
+.day-group__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-2) var(--space-5);
+  background: var(--surface-sunken);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: 650;
+}
+
+.day-group__sum {
+  color: var(--ink-muted);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Scroll area: the panel keeps a bounded height; day headers stick while their rows scroll past. */
+/* One fixed height for every state (rows, empty, first load, error), so switching period never
+   resizes the panel or makes the page jump. */
+.recent {
+  --recent-height: 460px;
+}
+
+.recent__body,
+.recent__error,
+.recent .skeleton {
+  height: var(--recent-height);
+}
+
+.recent__body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.recent__body > .empty-state {
+  margin: auto;
+}
+
+.recent__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain; /* the wheel stops at the list's end instead of dragging the page */
+  transition: opacity 150ms ease-out;
+}
+
+.recent__scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.recent__scroll .day-group__head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* Something above: the stuck header casts a soft shadow onto the rows. */
+.recent__body--above .day-group__head {
+  box-shadow: 0 6px 8px -6px rgb(0 0 0 / 0.18);
+}
+
+/* Something below: the last visible rows fade out. */
+.recent__body::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 32px;
+  background: linear-gradient(to bottom, transparent, var(--surface-raised));
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+
+.recent__body--below::after {
+  opacity: 1;
+}
+
+/* Refetching: keep the rows, dim them, and run a thin bar along the top. */
+.recent__body[aria-busy="true"] > * {
+  opacity: 0.55;
+}
+
+.recent__body[aria-busy="true"]::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background-size: 50% 100%;
+  background-repeat: no-repeat;
+  animation: recent-progress 900ms ease-in-out infinite;
+}
+
+@keyframes recent-progress {
+  from { background-position: -100% 0; }
+  to { background-position: 200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recent__body[aria-busy="true"]::before {
+    animation: none;
+    background: var(--accent);
+    opacity: 0.5;
+  }
+}
+
+.recent__cap {
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--line);
+  color: var(--ink-muted);
+  font-size: var(--type-label-size);
+}
+
+.recent__footer {
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 480px) {
+  .recent__bar,
+  .day-group__head,
+  .recent__cap,
+  .recent__footer {
+    padding-inline: var(--space-4);
+  }
+  .recent__dates {
+    grid-template-columns: 1fr 1fr;
+    flex-basis: 100%;
+  }
+  .recent {
+    --recent-height: min(60vh, 440px);
+  }
+}
+
 /* ---------- Ledger (Expenses / Income) ---------- */
 
 .ledger {
@@ -547,8 +735,62 @@ a {
   gap: var(--space-3);
 }
 
+/* ‹ October 2026 ›: same height as the fields beside it, label row included, so nothing moves. */
+.stepper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.stepper__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+}
+
+.stepper__caption {
+  font-weight: var(--type-label-weight);
+}
+
+.stepper__reset {
+  font-size: inherit;
+  white-space: nowrap;
+}
+
+.stepper__controls {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.stepper__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stepper__controls .icon-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 .filters__clear {
   justify-self: start;
+}
+
+.filters__clear.is-hidden {
+  visibility: hidden;
 }
 
 @media (min-width: 720px) {

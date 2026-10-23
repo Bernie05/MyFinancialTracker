@@ -11,10 +11,11 @@ import { protect, withSecurityHeaders } from "./security";
 /** Largest request body accepted (audit SEC-7). The biggest real one is under 2 KB; Bun answers 413 above this. */
 export const MAX_REQUEST_BODY = 64 * 1024;
 
-export function createAppRoutes(db: Db) {
+/** `devUserId`: only when login is switched off for development (config.ts REQUIRE_LOGIN). */
+export function createAppRoutes(db: Db, devUserId?: number) {
   const repos = createDrizzleRepositories(db);
   const auth = createAuthStore(db);
-  const api = protect({ ...createApiRoutes(repos), ...createAuthRoutes(auth, repos) }, auth, ["/api/health", ...PUBLIC_AUTH_PATHS]);
+  const api = protect({ ...createApiRoutes(repos), ...createAuthRoutes(auth, repos) }, auth, ["/api/health", ...PUBLIC_AUTH_PATHS], devUserId);
   return {
     ...api,
     "/api/*": () => withSecurityHeaders(Response.json({ error: { message: "No such endpoint." } }, { status: 404 })),

@@ -105,6 +105,9 @@ test("users can't see or touch each other's data", async () => {
   expect((await b.call("GET", "/api/alerts")).body).toEqual([]);
   expect(((await b.call("GET", "/api/categories")).body as { id: number }[]).some((c) => c.id === cat.id)).toBe(false);
   expect((await b.call("GET", "/api/summary?month=2026-10")).body.expenseMinor).toBe(1); // only B's own ₱0.01
+  // Day totals cover the whole day even when the page cuts it, and only B's rows.
+  await b.call("POST", "/api/transactions", { type: "expense", amountMinor: 2, description: "b2", categoryId: bCatWithTx.id, occurredOn: "2026-10-01" });
+  expect((await b.call("GET", "/api/transactions?pageSize=1")).body.days).toEqual([{ date: "2026-10-01", count: 2, incomeMinor: 0, expenseMinor: 3 }]);
 
   // And A's data is untouched.
   expect((await a.call("GET", `/api/cards/${card.id}`)).body.name).toBe("A card");

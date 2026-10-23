@@ -2,10 +2,10 @@ import { Button, Select, TextField } from "@mft/ui";
 import { useEffect, useState } from "react";
 import type { Category } from "../../../shared/contracts";
 import { ColorDot } from "../../layout/ColorDot";
-import { SearchIcon } from "../../layout/icons";
+import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from "../../layout/icons";
 import { categoryColor } from "../../lib/categoryColor";
 import { categoryOptions } from "../../lib/categoryOptions";
-import { rangePresets } from "../../lib/dates";
+import { rangeLabel, rangePresets } from "../../lib/dates";
 import type { TransactionFiltersState } from "./useTransactionFilters";
 
 interface TransactionFiltersProps {
@@ -17,7 +17,8 @@ interface TransactionFiltersProps {
 
 /** One row of filters above the list: date range, category, search. Every change resets to page 1. */
 export function TransactionFilters({ filters, categories, cardName }: TransactionFiltersProps) {
-  const { range, from, to, categoryId, q, update, clear, filtered, type } = filters;
+  const { range, from, to, step, stepped, categoryId, q, update, clear, filtered, type } = filters;
+  const steppedAway = step && stepped && !step.isCurrent ? step : null;
   const [text, setText] = useState(q ?? "");
 
   // Back/Forward or "Clear filters" can change q from outside; keep the box in sync.
@@ -37,11 +38,38 @@ export function TransactionFilters({ filters, categories, cardName }: Transactio
     <section className="filters" aria-label="Filters">
       <Select
         label="Date range"
-        value={range}
-        options={rangePresets}
+        // A month, week or day reached with ‹ › shows as itself; picking any preset starts over from it.
+        value={steppedAway ? "stepped" : range}
+        options={steppedAway ? [{ value: "stepped", label: steppedAway.label }, ...rangePresets] : rangePresets}
         // Switching to custom starts from the dates currently shown, so nothing jumps.
-        onChange={({ target: { value } }) => update(value === "custom" ? { range: value, from, to } : { range: value, from: undefined, to: undefined })}
+        onChange={({ target: { value } }) =>
+          update(value === "custom" ? { range: value, from, to, at: undefined } : { range: value, from: undefined, to: undefined, at: undefined })
+        }
       />
+      {/* Always rendered (disabled when the range doesn't step), so the bar never shifts. */}
+      <div className="stepper" role="group" aria-labelledby="stepper-caption">
+        <div className="stepper__top">
+          <span className="stepper__caption" id="stepper-caption">
+            Period
+          </span>
+          {step && !step.isCurrent && (
+            <button type="button" className="link-text stepper__reset" onClick={step.reset}>
+              {step.unit === "day" ? "Today" : `Back to this ${step.unit}`}
+            </button>
+          )}
+        </div>
+        <div className="stepper__controls">
+          <button type="button" className="icon-button" aria-label={`Previous ${step?.unit ?? "period"}`} disabled={!step} onClick={() => step?.go(-1)}>
+            <ChevronLeftIcon />
+          </button>
+          <span className="stepper__label" aria-live="polite">
+            {step ? step.label : rangeLabel(from, to)}
+          </span>
+          <button type="button" className="icon-button" aria-label={`Next ${step?.unit ?? "period"}`} disabled={!step} onClick={() => step?.go(1)}>
+            <ChevronRightIcon />
+          </button>
+        </div>
+      </div>
       {range === "custom" && (
         <>
           <TextField label="From" type="date" value={from ?? ""} onChange={(e) => update({ from: e.target.value })} />
@@ -76,11 +104,17 @@ export function TransactionFilters({ filters, categories, cardName }: Transactio
           </button>
         </span>
       )}
-      {filtered && (
-        <Button variant="ghost" size="sm" onClick={clear} className="filters__clear">
-          Clear filters
-        </Button>
-      )}
+      {/* Always rendered, only hidden when there's nothing to clear, so the bar's height never changes. */}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={clear}
+        className={`filters__clear${filtered ? "" : " is-hidden"}`}
+        aria-hidden={!filtered || undefined}
+        tabIndex={filtered ? undefined : -1}
+      >
+        Clear filters
+      </Button>
     </section>
   );
 }

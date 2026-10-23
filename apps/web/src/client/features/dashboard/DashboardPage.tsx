@@ -5,19 +5,17 @@ import { api } from "../../api/endpoints";
 import { AlertBanner } from "../../layout/AlertBanner";
 import { EmptyState } from "../../layout/EmptyState";
 import { EditTransactionDialog } from "../transactions/EditTransactionDialog";
-import { TransactionList } from "../transactions/TransactionList";
+import { RecentTransactions } from "./RecentTransactions";
 import { ExpensesIcon, IncomeIcon, PlusIcon } from "../../layout/icons";
 import { Loadable, Skeleton } from "../../layout/Loadable";
 import { PageHeader } from "../../layout/PageHeader";
 import { startAddTransaction } from "../../layout/quickAdd";
 import { refreshAlerts } from "../../lib/alerts";
-import { currentMonth, monthLabel, presetRange, shiftMonth, shortMonth } from "../../lib/dates";
-import { linkClick } from "../../lib/router";
+import { currentMonth, monthLabel, shiftMonth, shortMonth } from "../../lib/dates";
 import { useAsync } from "../../lib/useAsync";
 import { CategoryBars } from "../charts/CategoryBars";
 import { MonthlyBarChart } from "../charts/MonthlyBarChart";
 
-const RECENT = 6;
 /** A figure-shaped placeholder, so a tile never shows ₱0.00 before the real number arrives. */
 const loadingFigure = <span className="skeleton__inline" aria-label="Loading" />;
 const incomeVsExpense = [
@@ -45,7 +43,7 @@ export function DashboardPage() {
   const prevMonth = shiftMonth(month, -1);
   const summary = useAsync(() => api.getSummary(month), [month]);
   const monthly = useAsync(() => api.getMonthly(month, 6), [month]);
-  const recent = useAsync(() => api.listTransactions({ ...presetRange("month"), pageSize: RECENT }), [month]);
+  const [recentVersion, setRecentVersion] = useState(0);
 
   const categories = useAsync(() => api.listCategories(), []);
   const cards = useAsync(() => api.listCards(), []);
@@ -55,7 +53,7 @@ export function DashboardPage() {
   function changed() {
     summary.reload();
     monthly.reload();
-    recent.reload();
+    setRecentVersion((v) => v + 1);
     refreshAlerts();
   }
 
@@ -169,35 +167,7 @@ export function DashboardPage() {
           </Loadable>
         </Card>
 
-        <Card
-          title="Recent transactions"
-          subtitle={monthLabel(month)}
-          padding="none"
-          action={
-            <span className="card-links">
-              View all{" "}
-              <a href="/expenses" onClick={linkClick}>
-                expenses
-              </a>{" "}
-              or{" "}
-              <a href="/income" onClick={linkClick}>
-                income
-              </a>
-            </span>
-          }
-        >
-          <Loadable state={recent.state} reload={recent.reload} what="transactions">
-            {({ items: txs }) =>
-              txs.length === 0 ? (
-                <EmptyState heading="No transactions this month yet" action={
-                  <Button variant="secondary" size="sm" onClick={startAddTransaction}>Add transaction</Button>
-                } />
-              ) : (
-                <TransactionList transactions={txs} onEdit={setEditing} onDelete={removeTransaction} />
-              )
-            }
-          </Loadable>
-        </Card>
+        <RecentTransactions refresh={recentVersion} onEdit={setEditing} onDelete={removeTransaction} />
       </div>
 
       <EditTransactionDialog
