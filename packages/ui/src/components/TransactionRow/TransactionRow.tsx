@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import type { CSSProperties, HTMLAttributes, ReactNode } from "react";
 import { cx } from "../../lib/cx";
 import { Amount } from "../Amount";
 import { Badge } from "../Badge";
@@ -10,7 +10,7 @@ export interface TransactionRowProps extends HTMLAttributes<HTMLDivElement> {
   /** Category name; shown as a Badge. */
   category: string;
   /** Category color slot 1–6 (see Badge). */
-  categoryColor?: 1 | 2 | 3 | 4 | 5 | 6;
+  categoryColor?: 1 | 2 | 3 | 4 | 5 | 6 | string;
   /** When it happened. A Date is formatted with `locale`; a string is shown as given. */
   date: Date | string;
   /** Signed integer minor units: negative = expense, positive = income. */
@@ -46,6 +46,20 @@ export function TransactionRow({
 
   return (
     <div className={cx("mft-txn", className)} {...rest}>
+      {/* Category monogram: decorative, the chip beside the date names the category. */}
+      <span
+        className="mft-txn__avatar"
+        style={
+          categoryColor
+            ? ({
+                "--mft-txn-hue": typeof categoryColor === "number" ? `var(--chart-${categoryColor})` : categoryColor,
+              } as CSSProperties)
+            : undefined
+        }
+        aria-hidden="true"
+      >
+        {category.trim().charAt(0).toUpperCase()}
+      </span>
       <div className="mft-txn__main">
         <p className="mft-txn__description">{description}</p>
         <p className="mft-txn__meta">
@@ -60,6 +74,8 @@ export function TransactionRow({
         currency={currency}
         locale={locale}
         signDisplay="always"
+        // Money in is green; ordinary spending stays in ink, so red keeps meaning "over budget".
+        tone={minorUnits > 0 ? "income" : "neutral"}
       />
       {action != null && <div className="mft-txn__action">{action}</div>}
     </div>

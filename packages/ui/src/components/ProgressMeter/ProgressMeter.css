@@ -49,7 +49,7 @@
 
 /* Budget */
 .mft-meter--ok .mft-meter__fill {
-  background: var(--pine);
+  background: var(--accent);
 }
 .mft-meter--warn .mft-meter__fill {
   background: var(--marigold);

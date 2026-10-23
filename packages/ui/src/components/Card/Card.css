@@ -1,11 +1,13 @@
 .mft-card {
   background: var(--surface-raised);
-  border: 1px solid var(--line);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
   color: var(--ink);
   font-family: var(--font-sans);
   font-size: var(--type-body-size);
   line-height: var(--type-body-line);
+  /* Rows and toolbars inside reach the rounded edge cleanly. */
+  overflow: clip;
 }
 
 .mft-card__header {
@@ -25,10 +27,11 @@
   font-size: var(--type-title-2-size);
   line-height: var(--type-title-2-line);
   font-weight: var(--type-title-2-weight);
+  letter-spacing: var(--type-title-2-tracking);
 }
 
 .mft-card__subtitle {
-  margin: var(--space-1) 0 0;
+  margin: 2px 0 0;
   color: var(--ink-muted);
   font-size: var(--type-label-size);
   line-height: var(--type-label-line);
@@ -43,7 +46,7 @@
 }
 
 .mft-card--pad-none .mft-card__header {
-  padding-bottom: var(--space-3);
+  padding-bottom: var(--space-4);
 }
 
 @media (max-width: 480px) {

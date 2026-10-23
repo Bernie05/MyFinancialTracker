@@ -5,7 +5,7 @@ Triggers an action; its label says exactly what happens ("Add expense", "Save go
 ## What you provide
 
 - `children`: the label, a verb first, in sentence case.
-- `variant`: `primary` (one per view, `pine` fill), `secondary` (outlined), `ghost` (text-only, in cards and rows), `danger` (destructive: "Delete transaction").
+- `variant`: `primary` (one per view, `accent` fill), `secondary` (outlined), `ghost` (text-only, in cards and rows), `danger` (destructive: "Delete transaction").
 - `size`: `md` (40px, default) or `sm` (32px, in rows and toolbars).
 - `loading`: shows a spinner, keeps the width, blocks clicks.
 - `iconStart`: an optional 16px icon element.

@@ -9,8 +9,10 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun src/server/db/migrate.ts",
     "db:seed": "bun src/server/db/seed.ts",
+    "db:seed:demo": "bun src/server/db/seed-demo.ts",
     "db:studio": "drizzle-kit studio",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
     "@mft/ui": "workspace:*",

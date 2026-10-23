@@ -13,6 +13,7 @@ export * from "./components/Button";
 export * from "./components/Card";
 export * from "./components/ProgressMeter";
 export * from "./components/SegmentedControl";
+export * from "./components/Select";
 export * from "./components/StatTile";
 export * from "./components/TextField";
 export * from "./components/TransactionRow";

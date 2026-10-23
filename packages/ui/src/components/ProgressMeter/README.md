@@ -15,7 +15,7 @@ Shows how far along a budget or a savings goal is.
 
 | kind | state | fill |
 | --- | --- | --- |
-| budget | under `warnAt` | `pine` |
+| budget | under `warnAt` | `accent` |
 | budget | at or above `warnAt` | `marigold`, status in `marigold-ink` |
 | budget | over 100% | `expense`, status "Over budget" |
 | goal | any | `marigold` with a `marigold-ink` edge |

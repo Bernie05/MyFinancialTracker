@@ -6,6 +6,7 @@
     "build": "bun run --filter '@mft/ui' build",
     "dev": "bun run build && bun run --filter '@mft/web' dev",
     "db:setup": "bun run --filter '@mft/web' db:generate && bun run --filter '@mft/web' db:migrate && bun run --filter '@mft/web' db:seed",
+    "db:seed:demo": "bun run --filter '@mft/web' db:seed:demo",
     "typecheck": "bun run --filter '*' typecheck",
     "ds:export": "bun run --filter '@mft/ui' export:ds"
   }

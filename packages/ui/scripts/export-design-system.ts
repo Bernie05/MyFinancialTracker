@@ -13,10 +13,11 @@
  *   fonts/*.woff, assets/Logos/*
  */
 import { cp, mkdir, readdir, rm } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { designSystemTokens } from "./lib/token-outputs";
 
-const pkg = new URL("../", import.meta.url).pathname;
-const repo = new URL("../../../", import.meta.url).pathname;
+const pkg = fileURLToPath(new URL("../", import.meta.url));
+const repo = fileURLToPath(new URL("../../../", import.meta.url));
 const out = `${repo}design-system-export/project/`;
 const NAMESPACE = "MFT";
 
@@ -104,7 +105,7 @@ await cp(`${pkg}assets/fonts/OFL.txt`, `${out}assets/Fonts/OFL.txt`);
 await cp(`${pkg}assets/logo-mark.svg`, `${out}assets/Logos/logo-mark.svg`);
 await write(
   "assets/Logos/README.md",
-  "The MyFinancialTracker mark: three ascending bars on a `pine` tile, the tallest in `marigold` (the savings goal). Full-color only; it has fixed fills and does not inherit `currentColor`. Minimum size 24px; clear space of `space-2` on every side. The wordmark is plain type: Hanken Grotesk 650 in `ink`.\n",
+  "The MyFinancialTracker mark: three ascending bars on an `accent` tile, the tallest in `marigold` (the savings goal). Full-color only; it has fixed fills and does not inherit `currentColor`. Minimum size 24px; clear space of `space-2` on every side. The wordmark is plain type: Hanken Grotesk 650 in `ink`.\n",
 );
 await write(
   "assets/Fonts/README.md",

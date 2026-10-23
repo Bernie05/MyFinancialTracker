@@ -3,24 +3,40 @@
  *   bun run db:seed             categories only (safe to re-run)
  *   bun run db:seed --sample    also adds this month's sample transactions
  */
+import { categoryColorPresets, colorOwner, type CategoryColorPreset } from "../../shared/contracts";
 import { createDb } from "./client";
 import { categories, transactions, type TransactionType } from "./schema";
 
-const defaults: { name: string; type: TransactionType; color: number }[] = [
-  { name: "Groceries", type: "expense", color: 1 },
-  { name: "Bills & utilities", type: "expense", color: 2 },
-  { name: "Transport", type: "expense", color: 3 },
-  { name: "Dining out", type: "expense", color: 4 },
-  { name: "Shopping", type: "expense", color: 5 },
-  { name: "Health", type: "expense", color: 6 },
-  { name: "Salary", type: "income", color: 1 },
-  { name: "Freelance", type: "income", color: 3 },
-  { name: "Other income", type: "income", color: 5 },
+// Colors are preset keys (see categoryColorPresets). Existing rows keep theirs: the insert skips names that exist.
+const defaults: { name: string; type: TransactionType; color: CategoryColorPreset }[] = [
+  { name: "Groceries", type: "expense", color: "green" },
+  { name: "Bills & utilities", type: "expense", color: "red" },
+  { name: "Transport", type: "expense", color: "blue" },
+  { name: "Dining out", type: "expense", color: "orange" },
+  { name: "Shopping", type: "expense", color: "purple" },
+  { name: "Health", type: "expense", color: "pink" },
+  { name: "Salary", type: "income", color: "teal" },
+  { name: "Freelance", type: "income", color: "indigo" },
+  { name: "Other income", type: "income", color: "amber" },
 ];
 
 const db = createDb();
 
-await db.insert(categories).values(defaults).onConflictDoNothing();
+// Colors are unique. Existing categories keep theirs; a missing default whose color is taken
+// gets the next preset nobody uses, so re-seeding never trips the unique index.
+// Defaults are top-level categories; subcategories never clash with them.
+const existing = (await db.select().from(categories)).filter((c) => c.parentId === null);
+const missing = defaults.filter((d) => !existing.some((e) => e.name === d.name && e.type === d.type));
+const taken = existing.map((e) => ({ id: e.id, color: e.color ?? "" }));
+for (const d of missing) {
+  const color = !colorOwner(taken, d.color) ? d.color : categoryColorPresets.find((p) => !colorOwner(taken, p));
+  if (!color) {
+    console.warn(`seed: no free color for ${d.name}; skipped (free one up on the Categories page)`);
+    continue;
+  }
+  await db.insert(categories).values({ ...d, color });
+  taken.push({ id: -1, color });
+}
 console.log(`seed: ${defaults.length} default categories ensured`);
 
 if (process.argv.includes("--sample")) {

@@ -10,8 +10,9 @@
  */
 import type { BunPlugin } from "bun";
 import { rm } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
-const root = new URL("../", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../", import.meta.url));
 const external = ["react", "react-dom", "react/jsx-runtime"];
 
 await rm(`${root}dist`, { recursive: true, force: true });
