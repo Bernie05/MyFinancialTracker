@@ -1,4 +1,4 @@
-import { Button, TextField } from "@mft/ui";
+import { Button, Select, TextField } from "@mft/ui";
 import { useState, type FormEvent } from "react";
 import { categoryColorPresets, colorOwner, newCardSchema, type CardSummary } from "../../../shared/contracts";
 import { ApiError } from "../../api/client";
@@ -7,6 +7,7 @@ import { ColorPicker } from "../../layout/ColorPicker";
 import { ConfirmDialog } from "../../layout/ConfirmDialog";
 import { refreshAlerts } from "../../lib/alerts";
 import { parseAmountToMinor } from "../../lib/parseAmount";
+import { usePeople } from "../people/SplitField";
 import { CardFace } from "./CardFace";
 
 interface CardEditorProps {
@@ -18,10 +19,20 @@ interface CardEditorProps {
   onCancel: () => void;
 }
 
-type Field = "name" | "issuer" | "last4" | "limitMinor" | "closingDay" | "dueDay" | "notifyDays" | "color";
+type Field = "name" | "issuer" | "last4" | "limitMinor" | "closingDay" | "dueDay" | "notifyDays" | "color" | "installmentRates" | "defaultPersonId";
 type FieldErrors = Partial<Record<Field, string>>;
 
 const pesos = (minor: number) => (minor / 100).toFixed(2);
+
+/** One editable line of the rate table (strings while typing). */
+interface RateRow {
+  key: number;
+  months: string;
+  rate: string;
+}
+const COMMON_TERMS = [3, 6, 9, 12, 18, 24, 36];
+let nextKey = 1;
+const rateRow = (months: number | string, rate: number | string): RateRow => ({ key: nextKey++, months: String(months), rate: String(rate) });
 
 /** Add or edit a card: identity, limit, statement and due days, reminder days, color, archive. */
 export function CardEditor({ card, all, onSaved, onDeleted, onCancel }: CardEditorProps) {
@@ -36,7 +47,21 @@ export function CardEditor({ card, all, onSaved, onDeleted, onCancel }: CardEdit
   const [notifyDays, setNotifyDays] = useState(String(card?.notifyDays ?? 3));
   const [color, setColor] = useState(card?.color ?? firstFree ?? "#c0392b");
   const [archived, setArchived] = useState(card?.archived ?? false);
+  const [usualPerson, setUsualPerson] = useState(card?.defaultPersonId ? String(card.defaultPersonId) : "");
+  const { people } = usePeople();
+  const [rates, setRates] = useState<RateRow[]>(() => (card?.installmentRates ?? []).map((r) => rateRow(r.months, r.addOnRateBps / 100)));
+  /** Per rate row (by key): the message to show under it. */
+  const [rateErrors, setRateErrors] = useState<Record<number, string>>({});
   const [errors, setErrors] = useState<FieldErrors>({});
+
+  function addRate() {
+    const used = new Set(rates.map((r) => Number(r.months)));
+    const last = Math.max(0, ...used);
+    const months = COMMON_TERMS.find((t) => t > last && !used.has(t)) ?? COMMON_TERMS.find((t) => !used.has(t)) ?? "";
+    setRates([...rates, rateRow(months, "0")]);
+  }
+  const changeRate = (key: number, patch: Partial<RateRow>) => setRates(rates.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  const removeRate = (key: number) => setRates(rates.filter((r) => r.key !== key));
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -44,7 +69,17 @@ export function CardEditor({ card, all, onSaved, onDeleted, onCancel }: CardEdit
     event.preventDefault();
     setFormError(null);
     const limitMinor = parseAmountToMinor(limit);
+    // Fully blank rate lines are dropped; a blank rate on a filled line is an error, not a silent 0%.
+    const filled = rates.filter((r) => r.months.trim() !== "" || r.rate.trim() !== "");
+    const rowErrors: Record<number, string> = {};
+    const installmentRates = filled.map((r) => {
+      const rate = r.rate.replace(/[%\s]/g, "");
+      if (rate === "" || !Number.isFinite(Number(rate))) rowErrors[r.key] = "Enter a rate like 0.79, or 0.";
+      return { months: r.months.trim() === "" ? Number.NaN : Number(r.months), addOnRateBps: Math.round(Number(rate) * 100) };
+    });
     const parsed = newCardSchema.safeParse({
+      installmentRates,
+      defaultPersonId: usualPerson ? Number(usualPerson) : null,
       name,
       issuer,
       last4,
@@ -58,8 +93,15 @@ export function CardEditor({ card, all, onSaved, onDeleted, onCancel }: CardEdit
     if (limitMinor === null) next.limitMinor = "Enter a limit like 150,000.";
     const clash = colorOwner(others, color);
     if (clash) next.color = `${clash.name} already uses this color. Pick another.`;
-    for (const issue of parsed.error?.issues ?? []) next[issue.path[0] as Field] ??= issue.message;
-    if (!parsed.success || Object.keys(next).length > 0) {
+    for (const issue of parsed.error?.issues ?? []) {
+      if (issue.path[0] === "installmentRates") {
+        const row = typeof issue.path[1] === "number" ? filled[issue.path[1]] : undefined;
+        if (row) rowErrors[row.key] ??= issue.path[2] === "months" && Number.isNaN(installmentRates[issue.path[1] as number]!.months) ? "Enter the months." : issue.message;
+        else next.installmentRates ??= issue.message;
+      } else next[issue.path[0] as Field] ??= issue.message;
+    }
+    setRateErrors(rowErrors);
+    if (!parsed.success || Object.keys(next).length > 0 || Object.keys(rowErrors).length > 0) {
       setErrors(next);
       return;
     }
@@ -70,8 +112,19 @@ export function CardEditor({ card, all, onSaved, onDeleted, onCancel }: CardEdit
       refreshAlerts(); // notify days, due day or archiving can change what's alerting
       onSaved(card ? `${saved.name} saved` : `${saved.name} added`, saved.id);
     } catch (err) {
-      if (err instanceof ApiError && Object.keys(err.fields).length > 0) setErrors(err.fields as FieldErrors);
-      else setFormError(err instanceof Error ? err.message : "Couldn't save. Try again.");
+      if (err instanceof ApiError && Object.keys(err.fields).length > 0) {
+        // "installmentRates.2.months" → under that rate line.
+        const fromServer: FieldErrors = {};
+        const rows: Record<number, string> = {};
+        for (const [path, message] of Object.entries(err.fields)) {
+          const [field, index] = path.split(".");
+          const row = index !== undefined ? filled[Number(index)] : undefined;
+          if (field === "installmentRates" && row) rows[row.key] = message;
+          else fromServer[field as Field] = message;
+        }
+        setErrors(fromServer);
+        setRateErrors(rows);
+      } else setFormError(err instanceof Error ? err.message : "Couldn't save. Try again.");
     } finally {
       setBusy(false);
     }
@@ -95,7 +148,7 @@ export function CardEditor({ card, all, onSaved, onDeleted, onCancel }: CardEdit
   }
 
   const notify = Number(notifyDays);
-  const preview = { id: 0, name: name.trim() || "Card name", issuer: issuer.trim() || null, last4: /^\d{4}$/.test(last4) ? last4 : null, color: /^#[0-9a-fA-F]{6}$|^[a-z]+$/.test(color) ? color : "grey", limitMinor: 0, closingDay: 1, dueDay: 1, notifyDays: 0, archived: false };
+  const preview = { id: 0, name: name.trim() || "Card name", issuer: issuer.trim() || null, last4: /^\d{4}$/.test(last4) ? last4 : null, color: /^#[0-9a-fA-F]{6}$|^[a-z]+$/.test(color) ? color : "grey", limitMinor: 0, closingDay: 1, dueDay: 1, notifyDays: 0, archived: false, installmentRates: [], defaultPersonId: null };
 
   return (
     <form className="cat-editor" onSubmit={onSubmit} noValidate>
@@ -158,6 +211,68 @@ export function CardEditor({ card, all, onSaved, onDeleted, onCancel }: CardEdit
         }
       />
       <ColorPicker value={color} onChange={setColor} taken={others} noun="card" error={errors.color} />
+
+      <Select
+        label="Usually used by"
+        hint="New charges and installments on this card start out as theirs. You can still change each one."
+        value={usualPerson}
+        onChange={(e) => setUsualPerson(e.target.value)}
+        error={errors.defaultPersonId}
+        options={[
+          { value: "", label: "Me" },
+          ...people.filter((p) => !p.archived || String(p.id) === usualPerson).map((p) => ({ value: String(p.id), label: p.name })),
+        ]}
+      />
+
+      <fieldset className="card-rates">
+        <legend>Installment rates</legend>
+        <p className="card-rates__hint">
+          The terms this card offers and their add-on rate. Adding an installment on this card fills in the rate for the term you pick.
+        </p>
+        {rates.length > 0 && (
+          <ul className="card-rates__list">
+            {rates.map((r, i) => (
+              <li key={r.key} className="card-rates__row">
+                <TextField
+                  label="Months"
+                  type="number"
+                  min={1}
+                  max={60}
+                  value={r.months}
+                  onChange={(e) => changeRate(r.key, { months: e.target.value })}
+                  aria-label={`Term ${i + 1}: months`}
+                />
+                <TextField
+                  label="Add-on rate"
+                  suffix="% a month"
+                  inputMode="decimal"
+                  value={r.rate}
+                  onChange={(e) => changeRate(r.key, { rate: e.target.value })}
+                  aria-label={`Term ${i + 1}: add-on rate, percent a month`}
+                />
+                <Button type="button" variant="ghost" size="sm" className="card-rates__remove" onClick={() => removeRate(r.key)} aria-label={`Remove the ${r.months || "blank"}-month term`}>
+                  Remove
+                </Button>
+                {rateErrors[r.key] && (
+                  <p className="card-rates__error" role="alert">
+                    {rateErrors[r.key]}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {errors.installmentRates && (
+          <p className="card-rates__error" role="alert">
+            {errors.installmentRates}
+          </p>
+        )}
+        <div>
+          <Button type="button" variant="secondary" size="sm" onClick={addRate} disabled={rates.length >= 24}>
+            + Add term
+          </Button>
+        </div>
+      </fieldset>
 
       {card && (
         <label className="checkbox">

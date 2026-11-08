@@ -21,6 +21,8 @@ import {
 import { currentUserId } from "../context";
 import { HttpError, json, readBody, route } from "../http";
 import type { InstallmentRow, Repositories } from "../repositories/types";
+import { splitPeople } from "../../shared/split";
+import { checkSplit } from "./people";
 
 type WithId = Request & { params: { id: string } };
 
@@ -108,6 +110,14 @@ export function createCardRoutes(repos: Repositories) {
     if (Object.keys(fields).length > 0) throw new HttpError(409, "Some fields need fixing.", fields);
   }
 
+  /** "Usually used by" must be one of your people (an archived one only if the card already had them). */
+  async function assertPerson(personId: number | null | undefined, current?: number | null) {
+    if (personId === null || personId === undefined || personId === current) return;
+    const person = await repos.people.findById(personId);
+    if (!person) throw new HttpError(400, "Some fields need fixing.", { defaultPersonId: "Choose someone from your list." });
+    if (person.archived) throw new HttpError(400, "Some fields need fixing.", { defaultPersonId: `${person.name} is archived.` });
+  }
+
   return {
     "/api/cards": {
       GET: route(async () => json(await Promise.all((await repos.cards.list()).map(summarize)))),
@@ -115,6 +125,7 @@ export function createCardRoutes(repos: Repositories) {
       POST: route(async (req) => {
         const input = await readBody(req, newCardSchema);
         await assertFree(input);
+        await assertPerson(input.defaultPersonId);
         return json(await summarize(await repos.cards.create(input)), 201);
       }),
     },
@@ -126,6 +137,7 @@ export function createCardRoutes(repos: Repositories) {
         const card = await findCard(req.params.id);
         const input = await readBody(req, updateCardSchema);
         await assertFree(input, card.id);
+        await assertPerson(input.defaultPersonId, card.defaultPersonId);
         const updated = await repos.cards.update(card.id, input);
         // A new closing day moves every installment month to a different statement: rebuild them.
         if (input.closingDay !== undefined && input.closingDay !== card.closingDay) {
@@ -163,8 +175,10 @@ export function createCardRoutes(repos: Repositories) {
         if (card.archived) throw new HttpError(409, `${card.name} is archived. Unarchive it to add installments.`);
         const input = await readBody(req, newInstallmentSchema);
         await assertExpenseCategory(input.categoryId);
+        const split = await checkSplit(repos, input.split, { amountMinor: input.principalMinor, type: "expense" });
         const id = await repos.installments.create(card.id, {
           ...input,
+          split,
           firstBillingMonth: input.firstBillingMonth ?? defaultFirstBillingMonth(input.purchasedOn, card.closingDay),
         });
         const today = todayLocal();
@@ -194,7 +208,16 @@ export function createCardRoutes(repos: Repositories) {
         if (preterminatedOn && preterminatedOn < purchasedOn) {
           throw new HttpError(400, "Some fields need fixing.", { preterminatedOn: "Pre-termination can't be before the purchase." });
         }
-        await repos.installments.update(row.id, input);
+        // Exact amounts are checked against the principal (each monthly bill then splits in proportion).
+        let split = row.split;
+        if (input.split !== undefined || (input.principalMinor !== undefined && row.split?.mode === "amounts")) {
+          split = await checkSplit(repos, input.split === undefined ? row.split : input.split, {
+            amountMinor: input.principalMinor ?? row.principalMinor,
+            type: "expense",
+            keepIds: splitPeople(row.split),
+          });
+        }
+        await repos.installments.update(row.id, { ...input, ...(input.split !== undefined && { split }) });
         const today = todayLocal();
         await repos.installments.regenerate([row.id], today);
         return json(describe((await repos.installments.findById(row.id))!, card.closingDay, today));

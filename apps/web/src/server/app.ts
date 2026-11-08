@@ -8,8 +8,8 @@ import { createApiRoutes } from "./routes/api";
 import { createAuthRoutes, PUBLIC_AUTH_PATHS } from "./routes/auth";
 import { protect, withSecurityHeaders } from "./security";
 
-/** Largest request body accepted (audit SEC-7). The biggest real one is under 2 KB; Bun answers 413 above this. */
-export const MAX_REQUEST_BODY = 64 * 1024;
+// SEC-7 body limits: 64 KB per route (enforced in readBody), 4 MB server-wide for the Excel import.
+export { MAX_IMPORT_BODY, MAX_REQUEST_BODY } from "./http";
 
 /** `devUserId`: only when login is switched off for development (config.ts REQUIRE_LOGIN). */
 export function createAppRoutes(db: Db, devUserId?: number) {

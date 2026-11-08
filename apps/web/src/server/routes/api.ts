@@ -19,6 +19,8 @@ import {
 import { HttpError, json, readBody, readQuery, route } from "../http";
 import type { ChildrenPlan, Repositories } from "../repositories/types";
 import { createCardRoutes, ensureInstallmentsSynced } from "./cards";
+import { createImportExportRoutes } from "./importExport";
+import { checkSplit, createPeopleRoutes } from "./people";
 
 const plural = (n: number) => `${n} transaction${n === 1 ? "" : "s"}`;
 
@@ -56,6 +58,8 @@ export function createApiRoutes(repos: Repositories) {
 
   return {
     ...createCardRoutes(repos),
+    ...createImportExportRoutes(repos),
+    ...createPeopleRoutes(repos),
 
     "/api/health": {
       GET: route(() => json({ ok: true })),
@@ -192,7 +196,8 @@ export function createApiRoutes(repos: Repositories) {
             throw new HttpError(400, "Some fields need fixing.", { cardId: "Choose one of your active cards, or Cash or debit." });
           }
         }
-        return json(await repos.transactions.create(input), 201);
+        const split = await checkSplit(repos, input.split, { amountMinor: input.amountMinor, type: input.type });
+        return json(await repos.transactions.create({ ...input, split }), 201);
       }),
     },
 
@@ -219,7 +224,16 @@ export function createApiRoutes(repos: Repositories) {
             throw new HttpError(400, "Some fields need fixing.", { cardId: "Choose one of your active cards, or Cash or debit." });
           }
         }
-        return json(await repos.transactions.update(current.id, input));
+        // The split is checked against the amount it will have after this change.
+        let split = current.split;
+        if (input.split !== undefined || (input.amountMinor !== undefined && current.split?.mode === "amounts")) {
+          split = await checkSplit(repos, input.split === undefined ? current.split : input.split, {
+            amountMinor: input.amountMinor ?? current.amountMinor,
+            type: current.type,
+            keepIds: current.shares.map((s) => s.personId),
+          });
+        }
+        return json(await repos.transactions.update(current.id, { ...input, ...(input.split !== undefined && { split }) }));
       }),
 
       DELETE: route(async (req: Request & { params: { id: string } }) => {

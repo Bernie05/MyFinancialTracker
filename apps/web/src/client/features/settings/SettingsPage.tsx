@@ -5,6 +5,7 @@ import { api } from "../../api/endpoints";
 import { PageHeader } from "../../layout/PageHeader";
 import { linkClick } from "../../lib/router";
 import { useSession } from "../../lib/session";
+import { ExcelCard } from "./ExcelCard";
 
 type FieldErrors = Partial<Record<"currentPassword" | "newPassword", string>>;
 
@@ -88,6 +89,8 @@ export function SettingsPage() {
             </div>
           </form>
         </Card>
+
+        <ExcelCard />
 
         <Card title="Categories" subtitle="Names, colors and subcategories.">
           <a className="link-text" href="/categories" onClick={linkClick}>

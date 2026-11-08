@@ -1,6 +1,8 @@
 import { Button, Select, TextField } from "@mft/ui";
 import { useMemo, useState, type FormEvent } from "react";
-import { newTransactionSchema, type Card, type Category, type Transaction, type TransactionType } from "../../../shared/contracts";
+import { newTransactionSchema, type Card, type Category, type SplitInput, type Transaction, type TransactionType } from "../../../shared/contracts";
+import { normalizeSplit } from "../../../shared/split";
+import { SplitField, splitProblem, usePeople } from "../people/SplitField";
 import { ApiError } from "../../api/client";
 import { api } from "../../api/endpoints";
 import { ColorDot } from "../../layout/ColorDot";
@@ -23,7 +25,11 @@ interface AddTransactionFormProps {
   onAdded: (message: string) => void;
 }
 
-type FieldErrors = Partial<Record<"amountMinor" | "description" | "categoryId" | "occurredOn" | "note" | "cardId", string>>;
+type FieldErrors = Partial<Record<"amountMinor" | "description" | "categoryId" | "occurredOn" | "note" | "cardId" | "split", string>>;
+
+/** A card's usual person as a split ("all theirs"), or null for you. */
+const usualFor = (card: Card | undefined): SplitInput | null =>
+  card?.defaultPersonId ? { mode: "equal", parts: [{ personId: card.defaultPersonId, value: 1 }] } : null;
 
 /** Adds a transaction, or edits one when `transaction` is given (same fields, same validation). */
 export function AddTransactionForm({ type, categories, cards = [], defaultCardId, transaction: tx, onAdded }: AddTransactionFormProps) {
@@ -34,7 +40,16 @@ export function AddTransactionForm({ type, categories, cards = [], defaultCardId
   const [note, setNote] = useState(tx?.note ?? "");
   // "" = cash or debit, else a card id.
   const [paidWith, setPaidWith] = useState(tx?.card ? String(tx.card.id) : defaultCardId ? String(defaultCardId) : "");
+  // Who it's for. A new charge starts with the card's usual person, until you choose yourself.
+  const [split, setSplit] = useState<SplitInput | null>(() => (tx ? tx.split : usualFor(cards.find((c) => c.id === defaultCardId))));
+  const [splitTouched, setSplitTouched] = useState(false);
+  const { people, reload: reloadPeople } = usePeople();
   const [errors, setErrors] = useState<FieldErrors>({});
+
+  function choosePaidWith(value: string) {
+    setPaidWith(value);
+    if (!tx && !splitTouched) setSplit(usualFor(cards.find((c) => String(c.id) === value)));
+  }
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -59,11 +74,14 @@ export function AddTransactionForm({ type, categories, cards = [], defaultCardId
       occurredOn,
       note,
       cardId: type === "expense" && paidWith ? Number(paidWith) : null,
+      split: type === "expense" ? normalizeSplit(split) : null,
     });
+    const problem = type === "expense" ? splitProblem(split, amountMinor) : undefined;
 
-    if (!parsed.success || amountMinor === null) {
+    if (!parsed.success || amountMinor === null || problem) {
       const next: FieldErrors = {};
       if (amountMinor === null) next.amountMinor = "Enter an amount like 1,250.50.";
+      if (problem) next.split = problem;
       for (const issue of parsed.error?.issues ?? []) {
         const key = issue.path[0] as keyof FieldErrors;
         next[key] ??= issue.message;
@@ -84,11 +102,14 @@ export function AddTransactionForm({ type, categories, cards = [], defaultCardId
         setAmountText("");
         setDescription("");
         setNote("");
+        setSplit(usualFor(cards.find((c) => String(c.id) === paidWith)));
+        setSplitTouched(false);
         onAdded(type === "expense" ? "Expense added" : "Income added");
       }
     } catch (err) {
       if (err instanceof ApiError) {
-        setErrors(err.fields as FieldErrors);
+        // "split.parts.1.value" and friends all show under the For field.
+        setErrors(Object.fromEntries(Object.entries(err.fields).map(([k, v]) => [k.startsWith("split") ? "split" : k, v])) as FieldErrors);
         if (Object.keys(err.fields).length === 0) setFormError(err.message);
       } else {
         setFormError("Couldn't save. Try again.");
@@ -144,13 +165,27 @@ export function AddTransactionForm({ type, categories, cards = [], defaultCardId
         <Select
           label="Paid with"
           value={paidWith}
-          onChange={(e) => setPaidWith(e.target.value)}
+          onChange={(e) => choosePaidWith(e.target.value)}
           error={errors.cardId}
           prefix={selectedCard && <ColorDot color={categoryColor(selectedCard.color)} />}
           options={[
             { value: "", label: "Cash or debit" },
             ...cardChoices.map((c) => ({ value: String(c.id), label: c.last4 ? `${c.name} ••${c.last4}` : c.name })),
           ]}
+        />
+      )}
+
+      {type === "expense" && (
+        <SplitField
+          value={split}
+          onChange={(next) => {
+            setSplit(next);
+            setSplitTouched(true);
+          }}
+          amountMinor={parseAmountToMinor(amountText)}
+          people={people}
+          onPersonAdded={reloadPeople}
+          error={errors.split}
         />
       )}
 

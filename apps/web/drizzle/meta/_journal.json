@@ -50,6 +50,20 @@
       "when": 1792738390980,
       "tag": "0006_users_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1794112847009,
+      "tag": "0007_card_installment_rates",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1794113722361,
+      "tag": "0008_people_and_splits",
+      "breakpoints": true
     }
   ]
 }

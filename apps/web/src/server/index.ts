@@ -7,7 +7,7 @@
  * The HTML document's CSP and referrer policy are <meta> tags in index.html (Bun can't add headers to it).
  */
 import index from "../client/index.html";
-import { createAppRoutes, MAX_REQUEST_BODY } from "./app";
+import { createAppRoutes, MAX_IMPORT_BODY } from "./app";
 import { createAuthStore } from "./auth";
 import { DEV_USER_EMAIL, REQUIRE_LOGIN } from "./config";
 import { createDb } from "./db/client";
@@ -34,7 +34,8 @@ if (!REQUIRE_LOGIN) {
 const server = Bun.serve({
   port: Number(process.env.PORT ?? 3000),
   hostname: devUserId === undefined ? undefined : "127.0.0.1",
-  maxRequestBodySize: MAX_REQUEST_BODY,
+  // Server-wide cap; every route but the import also caps itself at 64 KB (readBody).
+  maxRequestBodySize: MAX_IMPORT_BODY,
   routes: {
     // Every /api route is behind the session check and security headers (see security.ts).
     ...createAppRoutes(db, devUserId),

@@ -3,6 +3,8 @@ import { CardDetailPage } from "./features/cards/CardDetailPage";
 import { CardsPage } from "./features/cards/CardsPage";
 import { CategoriesPage } from "./features/categories/CategoriesPage";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
+import { PeoplePage } from "./features/people/PeoplePage";
+import { PersonPage } from "./features/people/PersonPage";
 import { ExpensesReportPage } from "./features/reports/ExpensesReportPage";
 import { TransactionsPage } from "./features/transactions/TransactionsPage";
 import { AlertBell } from "./layout/AlertBell";
@@ -13,6 +15,7 @@ import {
   ExpensesIcon,
   IncomeIcon,
   MenuIcon,
+  PeopleIcon,
   PlusIcon,
   ReportIcon,
   SettingsIcon,
@@ -33,6 +36,7 @@ const mainNav: NavItem[] = [
   { path: "/expenses", label: "Expenses", icon: <ExpensesIcon /> },
   { path: "/income", label: "Income", icon: <IncomeIcon /> },
   { path: "/cards", label: "Credit Cards", icon: <CardIcon /> },
+  { path: "/people", label: "People", icon: <PeopleIcon /> },
 ];
 const reportNav: NavItem[] = [
   { path: "/reports/budget", label: "Budget Report", icon: <BudgetIcon /> },
@@ -58,6 +62,7 @@ const pages: Record<string, ReactNode> = {
   ),
   "/reports/expenses": <ExpensesReportPage />,
   "/cards": <CardsPage />,
+  "/people": <PeoplePage />,
   "/categories": <CategoriesPage />,
   "/settings": <SettingsPage />,
 };
@@ -101,6 +106,7 @@ function Shell({ user }: { user: User }) {
   const section = allNav.find((item) => item.path === path || (item.path !== "/" && path.startsWith(`${item.path}/`)));
   const title = section?.label ?? "Page not found";
   const cardId = path.match(/^\/cards\/(\d+)$/)?.[1];
+  const personId = path.match(/^\/people\/(\d+)$/)?.[1];
 
   // Card reminders: checked once on load; pages refresh them after payments and card expenses.
   useEffect(() => {
@@ -170,7 +176,9 @@ function Shell({ user }: { user: User }) {
       {menuOpen && <div className="shell__backdrop" onClick={closeMenu} aria-hidden="true" />}
 
       <main className="shell__main" ref={mainRef} tabIndex={-1}>
-        {pages[path] ?? (cardId ? <CardDetailPage key={cardId} id={Number(cardId)} /> : null) ?? (
+        {pages[path] ??
+          (cardId ? <CardDetailPage key={cardId} id={Number(cardId)} /> : null) ??
+          (personId ? <PersonPage key={personId} id={Number(personId)} /> : null) ?? (
           <PlaceholderPage
             title="Page not found"
             icon={<DashboardIcon />}

@@ -18,13 +18,37 @@ interface TransactionListProps {
   onEdit?: (tx: Transaction) => void;
 }
 
-/** Extra line on a ledger row: the card it was paid with (if any), then the note. */
+/** "For Ana", or "Split · you ₱500" with everyone's part on hover. Nothing when it's all yours. */
+function whoTag(tx: Transaction) {
+  if (tx.shares.length === 0) return null;
+  const everyone = [...(tx.myShareMinor > 0 ? [`You ${formatMoney(tx.myShareMinor)}`] : []), ...tx.shares.map((s) => `${s.name} ${formatMoney(s.amountMinor)}`)].join(" · ");
+  const label = tx.myShareMinor === 0 && tx.shares.length === 1 ? `For ${tx.shares[0]!.name}` : `Split · you ${formatMoney(tx.myShareMinor)}`;
+  return (
+    <span className="who-tag" title={everyone}>
+      {label}
+      <span className="visually-hidden"> ({everyone})</span>
+    </span>
+  );
+}
+
+/** Extra line on a ledger row: who it's for, the card it was paid with (if any), then the note. */
 export function transactionMeta(tx: Transaction, showCard = true) {
   const plan = tx.installmentId !== null && <span className="inst-tag">Installment</span>;
-  if (!tx.card || !showCard) return plan || (tx.note ?? undefined);
+  const who = whoTag(tx);
+  if (!tx.card || !showCard) {
+    if (!plan && !who) return tx.note ?? undefined;
+    return (
+      <>
+        {plan}
+        {who}
+        {tx.note && <span> {tx.note}</span>}
+      </>
+    );
+  }
   return (
     <>
       {plan}
+      {who}
       <span className="card-tag">
         <ColorDot color={categoryColor(tx.card.color)} />
         {tx.card.name}

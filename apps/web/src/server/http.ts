@@ -22,12 +22,24 @@ function errorResponse(status: number, message: string, fields?: Record<string, 
   return json(body, status);
 }
 
-/** Parses a JSON body against a schema; malformed JSON and invalid shapes both become a 400. */
-export async function readBody<T>(req: Request, schema: ZodType<T>): Promise<T> {
+/** Largest body most routes accept (audit SEC-7). The biggest real one is under 2 KB. */
+export const MAX_REQUEST_BODY = 64 * 1024;
+/** The Excel import's rows (up to 5000 per sheet) are the one larger body. Bun's own limit is set to this. */
+export const MAX_IMPORT_BODY = 4 * 1024 * 1024;
+
+/**
+ * Parses a JSON body against a schema; malformed JSON and invalid shapes both become a 400.
+ * Bodies over `maxBytes` get a 413 (Bun's server-wide limit is the larger import one).
+ */
+export async function readBody<T>(req: Request, schema: ZodType<T>, maxBytes = MAX_REQUEST_BODY): Promise<T> {
+  if (Number(req.headers.get("content-length") ?? 0) > maxBytes) throw new HttpError(413, "That request is too large.");
   let raw: unknown;
   try {
-    raw = await req.json();
-  } catch {
+    const bytes = await req.arrayBuffer();
+    if (bytes.byteLength > maxBytes) throw new HttpError(413, "That request is too large.");
+    raw = JSON.parse(new TextDecoder().decode(bytes));
+  } catch (err) {
+    if (err instanceof HttpError) throw err;
     throw new HttpError(400, "The request body isn't valid JSON.");
   }
   return schema.parse(raw);

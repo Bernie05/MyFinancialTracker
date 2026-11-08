@@ -143,6 +143,164 @@ export const deleteCategoryQuerySchema = z.object({
   deleteChildren: z.enum(["1"]).optional(),
 });
 
+// People and splits ----------------------------------------------------------
+
+/**
+ * Who a transaction or installment plan is for (see shared/split.ts): null = all yours. Each part is a
+ * person (personId, or null for you) and a value: ignored for equal, a weight for shares, centavos for amounts.
+ */
+export const splitSchema = z
+  .object({
+    mode: z.enum(["equal", "shares", "amounts"]),
+    parts: z
+      .array(z.object({ personId: z.number().int().positive().nullable(), value: z.number().int().min(0).max(MAX_MINOR) }))
+      .min(1, "Pick at least one person.")
+      .max(12, "Split between at most 12 people."),
+  })
+  .superRefine((v, ctx) => {
+    const seen = new Set<number | null>();
+    v.parts.forEach((p, i) => {
+      if (seen.has(p.personId)) ctx.addIssue({ code: "custom", path: ["parts", i, "personId"], message: "Each person can appear once." });
+      seen.add(p.personId);
+      if (v.mode === "shares" && (p.value < 1 || p.value > 1000)) ctx.addIssue({ code: "custom", path: ["parts", i, "value"], message: "Shares are whole numbers from 1 to 1000." });
+      if (v.mode === "amounts" && p.value < 1) ctx.addIssue({ code: "custom", path: ["parts", i, "value"], message: "Each amount must be above ₱0." });
+    });
+  });
+export type SplitInput = z.infer<typeof splitSchema>;
+
+const personNameSchema = z.string().trim().min(1, "Add a name.").max(40, "Keep it under 40 characters.");
+
+export const personSchema = z.object({ id: z.number().int(), name: z.string(), archived: z.boolean() });
+export type Person = z.infer<typeof personSchema>;
+
+/**
+ * A person with what they owe you. `balanceMinor` is what's billed so far minus repayments; installment
+ * months not billed yet are in `upcomingMinor`, so `toPayOffMinor` = balance + upcoming.
+ */
+export const personSummarySchema = personSchema.extend({
+  chargedMinor: z.number().int(),
+  /** Their part of one-time (straight) charges. */
+  straightMinor: z.number().int(),
+  /** Their part of installment months billed so far. */
+  installmentBilledMinor: z.number().int(),
+  repaidMinor: z.number().int(),
+  balanceMinor: z.number().int(),
+  /** Their part of installment months still to be billed. */
+  upcomingMinor: z.number().int(),
+  /** Their part of one regular month across active plans. */
+  monthlyMinor: z.number().int(),
+  toPayOffMinor: z.number().int(),
+  activePlans: z.number().int(),
+  shareCount: z.number().int(),
+  /** Unpaid from billings whose due date has passed. */
+  overdueMinor: z.number().int(),
+  /** The next unpaid billing that isn't past due yet (with anything carried into it). */
+  nextDue: z.object({ dueDate: dateSchema, amountMinor: z.number().int() }).nullable(),
+});
+export type PersonSummary = z.infer<typeof personSummarySchema>;
+
+export const newPersonSchema = z.object({ name: personNameSchema });
+export type NewPerson = z.input<typeof newPersonSchema>;
+export const updatePersonSchema = z
+  .object({ name: personNameSchema, archived: z.boolean() })
+  .partial()
+  .refine((v) => Object.keys(v).length > 0, "Change at least one field.");
+export type UpdatePerson = z.input<typeof updatePersonSchema>;
+
+export const personPaymentSchema = z.object({
+  id: z.number().int(),
+  personId: z.number().int(),
+  amountMinor: z.number().int(),
+  paidOn: dateSchema,
+  note: z.string().nullable(),
+});
+export type PersonPayment = z.infer<typeof personPaymentSchema>;
+export const newPersonPaymentSchema = z.object({
+  amountMinor: amountMinorSchema,
+  paidOn: dateSchema,
+  note: z.string().trim().max(200).nullish().transform((v) => v || null),
+});
+export type NewPersonPayment = z.input<typeof newPersonPaymentSchema>;
+
+/** One charge a person has a part of. */
+export const personShareSchema = z.object({
+  transactionId: z.number().int(),
+  occurredOn: dateSchema,
+  description: z.string(),
+  totalMinor: z.number().int(),
+  amountMinor: z.number().int(),
+  card: z.object({ id: z.number().int(), name: z.string() }).nullable(),
+  installmentId: z.number().int().nullable(),
+});
+export type PersonShare = z.infer<typeof personShareSchema>;
+
+/** An installment plan a person has a part of, with their part of it. */
+export const personPlanSchema = z.object({
+  installmentId: z.number().int(),
+  cardId: z.number().int(),
+  cardName: z.string(),
+  description: z.string(),
+  months: z.number().int(),
+  monthsBilled: z.number().int(),
+  /** Their part of a regular month. */
+  monthlyMinor: z.number().int(),
+  billedMinor: z.number().int(),
+  upcomingMinor: z.number().int(),
+  /** When their next part is billed; null once the plan is done. */
+  nextBilledOn: dateSchema.nullable(),
+  status: z.enum(["active", "completed"]),
+});
+export type PersonPlan = z.infer<typeof personPlanSchema>;
+
+/**
+ * One billing: a person's charges on one card statement (or, for cash/debit, one month), due on one date.
+ * Repayments settle billings oldest first. An unpaid billing whose due date has passed is "unpaid", and
+ * what's left of it carries into the next billing (`carriedInMinor`).
+ */
+export const personBillingSchema = z.object({
+  key: z.string(),
+  cardId: z.number().int().nullable(),
+  cardName: z.string().nullable(),
+  /** The statement close, or null for cash/debit. */
+  closeDate: dateSchema.nullable(),
+  dueDate: dateSchema,
+  items: z.array(
+    z.object({
+      key: z.string(),
+      occurredOn: dateSchema,
+      description: z.string(),
+      totalMinor: z.number().int(),
+      /** This person's part. */
+      amountMinor: z.number().int(),
+      installmentId: z.number().int().nullable(),
+      /** An installment month not billed yet (it's on a future statement). */
+      upcoming: z.boolean(),
+      /** Fully covered by their repayments (applied oldest first). */
+      paid: z.boolean(),
+    }),
+  ),
+  amountMinor: z.number().int(),
+  paidMinor: z.number().int(),
+  remainingMinor: z.number().int(),
+  /** Unpaid amounts from earlier billings now due with this one. */
+  carriedInMinor: z.number().int(),
+  /** What "Paid" pays: this billing plus everything unpaid before it. */
+  payMinor: z.number().int(),
+  status: z.enum(["paid", "partial", "due", "unpaid"]),
+  /** For an unpaid past-due billing: the due date of the billing it moved to. */
+  movedTo: dateSchema.nullable(),
+});
+export type PersonBilling = z.infer<typeof personBillingSchema>;
+
+export const personDetailSchema = personSummarySchema.extend({
+  shares: z.array(personShareSchema),
+  payments: z.array(personPaymentSchema),
+  plans: z.array(personPlanSchema),
+  /** Oldest first, including upcoming installment months (as future billings). */
+  billings: z.array(personBillingSchema),
+});
+export type PersonDetail = z.infer<typeof personDetailSchema>;
+
 // Transactions ----------------------------------------------------------------
 
 export const transactionSchema = z.object({
@@ -157,6 +315,12 @@ export const transactionSchema = z.object({
   card: z.object({ id: z.number().int(), name: z.string(), last4: z.string().nullable(), color: z.string() }).nullable(),
   /** Set when this is one billed month of an installment plan: read-only, managed by the plan. */
   installmentId: z.number().int().nullable(),
+  /** Who it's for; null = all yours. */
+  split: splitSchema.nullable(),
+  /** Your part of the amount (what reports count). */
+  myShareMinor: z.number().int(),
+  /** Everyone else's part, with their names. */
+  shares: z.array(z.object({ personId: z.number().int(), name: z.string(), amountMinor: z.number().int() })),
 });
 export type Transaction = z.infer<typeof transactionSchema>;
 
@@ -169,6 +333,8 @@ export const newTransactionSchema = z.object({
   note: z.string().trim().max(500).nullish().transform((v) => v || null),
   /** "Paid with": a credit card id, or null/absent for cash or debit. Expenses only. */
   cardId: z.number().int().positive().nullish().transform((v) => v ?? null),
+  /** Who it's for (expenses only); null or absent = all yours. */
+  split: splitSchema.nullish().transform((v) => v ?? null),
 });
 export type NewTransaction = z.input<typeof newTransactionSchema>;
 
@@ -181,6 +347,7 @@ export const updateTransactionSchema = z
     occurredOn: dateSchema,
     note: z.string().trim().max(500).nullable().transform((v) => v || null),
     cardId: z.number().int().positive().nullable(),
+    split: splitSchema.nullable(),
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, "Change at least one field.");
@@ -266,6 +433,26 @@ const dayOfMonthSchema = (what: string) =>
 
 const notifyDaysSchema = z.coerce.number().int().min(0, "Use 0 to 30 days.").max(30, "Use 0 to 30 days.");
 
+/** One installment term the card offers and its monthly add-on rate (0.79% a month = 79 bps). */
+export const installmentRateSchema = z.object({
+  months: z.coerce.number().int("Use whole months.").min(1, "Use 1 to 60 months.").max(60, "Use 1 to 60 months."),
+  addOnRateBps: z.coerce.number().int().min(0, "The rate can't be negative.").max(500, "Use at most 5% a month."),
+});
+export type InstallmentRate = z.infer<typeof installmentRateSchema>;
+
+/** A card's rate table: one rate per term, kept sorted by months. */
+export const installmentRatesSchema = z
+  .array(installmentRateSchema)
+  .max(24, "Keep it to 24 terms.")
+  .superRefine((rates, ctx) => {
+    const seen = new Set<number>();
+    rates.forEach((r, i) => {
+      if (seen.has(r.months)) ctx.addIssue({ code: "custom", path: [i, "months"], message: `${r.months} months is listed twice.` });
+      seen.add(r.months);
+    });
+  })
+  .transform((rates) => [...rates].sort((a, b) => a.months - b.months));
+
 // Shared fields; defaults belong only to create, so a PATCH never resets a field it didn't send.
 const cardFields = z.object({
   name: z.string().trim().min(1, "Add a name.").max(40, "Keep it under 40 characters."),
@@ -282,9 +469,16 @@ const cardFields = z.object({
   dueDay: dayOfMonthSchema("The due day"),
   notifyDays: notifyDaysSchema,
   color: categoryColorSchema,
+  installmentRates: installmentRatesSchema,
+  /** Who usually uses the card (their charges start out as theirs); null = you. */
+  defaultPersonId: z.number().int().positive().nullable(),
 });
 
-export const newCardSchema = cardFields.extend({ notifyDays: notifyDaysSchema.default(3) });
+export const newCardSchema = cardFields.extend({
+  notifyDays: notifyDaysSchema.default(3),
+  installmentRates: installmentRatesSchema.default([]),
+  defaultPersonId: z.number().int().positive().nullish().transform((v) => v ?? null),
+});
 export type NewCard = z.input<typeof newCardSchema>;
 
 export const updateCardSchema = cardFields
@@ -306,8 +500,11 @@ export const cardSchema = z.object({
   notifyDays: z.number().int(),
   color: z.string(),
   archived: z.boolean(),
+  /** Terms the card offers and their rates; the installment form pre-fills the rate from these. */
+  installmentRates: z.array(installmentRateSchema),
+  defaultPersonId: z.number().int().nullable(),
 });
-export type Card = z.infer<typeof cardSchema>;
+export type Card =z.infer<typeof cardSchema>;
 
 /** A card with its statement math for today (see shared/cardCycle.ts). */
 export const cardSummarySchema = cardSchema.extend({
@@ -367,6 +564,8 @@ const installmentFields = z.object({
   firstBillingMonth: monthSchema,
   /** Pre-termination date: the remaining principal is billed in that cycle. */
   preterminatedOn: dateSchema.nullable(),
+  /** Who the plan is for; each billed month splits the same way. Null = all yours. */
+  split: splitSchema.nullable(),
 });
 
 const purchaseRules = <T extends { purchasedOn?: string; firstBillingMonth?: string; preterminatedOn?: string | null }>(v: T, ctx: z.RefinementCtx) => {
@@ -386,6 +585,7 @@ export const newInstallmentSchema = installmentFields
     feeMinor: installmentFields.shape.feeMinor.default(0),
     firstBillingMonth: monthSchema.optional(),
     preterminatedOn: dateSchema.nullish().transform((v) => v ?? null),
+    split: splitSchema.nullish().transform((v) => v ?? null),
   })
   .superRefine(purchaseRules);
 export type NewInstallment = z.input<typeof newInstallmentSchema>;
@@ -422,6 +622,7 @@ export const installmentSchema = z.object({
   feeMinor: z.number().int(),
   firstBillingMonth: monthSchema,
   preterminatedOn: dateSchema.nullable(),
+  split: splitSchema.nullable(),
   // Derived from the terms (shared/installments.ts):
   monthlyMinor: z.number().int(),
   totalMinor: z.number().int(),

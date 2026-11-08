@@ -10,6 +10,12 @@ import {
   installmentDetailSchema,
   monthSummarySchema,
   monthTotalsSchema,
+  personDetailSchema,
+  personPaymentSchema,
+  personSummarySchema,
+  type NewPerson,
+  type NewPersonPayment,
+  type UpdatePerson,
   transactionPageSchema,
   transactionSchema,
   type Month,
@@ -24,9 +30,15 @@ import {
   type UpdateInstallment,
   type UpdateTransaction,
 } from "../../shared/contracts";
+import { exportDataSchema, importReportSchema, type ImportRequest } from "../../shared/importExport";
 import { request } from "./client";
 
 export const api = {
+  // Excel export / import (the workbook is built and read in the browser: lib/excel.ts)
+  exportData: () => request("/api/export", exportDataSchema),
+  /** `commit: false` previews; `commit: true` applies, only when the preview has no errors. */
+  importData: (input: ImportRequest) => request("/api/import", importReportSchema, { method: "POST", body: JSON.stringify(input) }),
+
   // Accounts
   me: () => request("/api/auth/me", z.object({ user: userSchema })),
   /** Always the same 202 message, whether or not the email was new (no session; sign in next). */
@@ -36,6 +48,16 @@ export const api = {
   changePassword: (input: ChangePassword) => request("/api/auth/password", null, { method: "POST", body: JSON.stringify(input) }),
 
   listCategories: () => request("/api/categories", z.array(categoryListItemSchema)),
+
+  // People (friends whose charges go on your cards) and what they owe
+  listPeople: () => request("/api/people", z.array(personSummarySchema)),
+  getPerson: (id: number) => request(`/api/people/${id}`, personDetailSchema),
+  createPerson: (input: NewPerson) => request("/api/people", personSummarySchema, { method: "POST", body: JSON.stringify(input) }),
+  updatePerson: (id: number, input: UpdatePerson) => request(`/api/people/${id}`, personSummarySchema, { method: "PATCH", body: JSON.stringify(input) }),
+  deletePerson: (id: number) => request(`/api/people/${id}`, null, { method: "DELETE" }),
+  addPersonPayment: (id: number, input: NewPersonPayment) =>
+    request(`/api/people/${id}/payments`, personPaymentSchema, { method: "POST", body: JSON.stringify(input) }),
+  deletePersonPayment: (id: number, paymentId: number) => request(`/api/people/${id}/payments/${paymentId}`, null, { method: "DELETE" }),
 
   createCategory: (input: NewCategory) =>
     request("/api/categories", categoryListItemSchema, { method: "POST", body: JSON.stringify(input) }),

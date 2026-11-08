@@ -63,6 +63,8 @@ Requests flow one way: **route → repository interface → Drizzle → SQLite**
 | POST | `/api/auth/logout` | `{}` | `204`; deletes the session and clears the cookie |
 | GET | `/api/auth/me` | | `{ user: { id, email } }`, or `401` |
 | POST | `/api/auth/password` | `{ currentPassword, newPassword }` | `204`; other sessions are signed out |
+| GET | `/api/export` | | `{ transactions, installments, categories, cards }` for the Excel export (billed installment months left out; the browser builds the .xlsx) |
+| POST | `/api/import` | `{ commit, transactions: Row[], installments: Row[] }`, rows as read from the workbook (columns in `shared/importExport.ts`), up to 5000 each, body up to 4 MB | `ImportReport`: added / updated / unchanged counts, new categories, errors by sheet and row. `commit: true` applies only when there are no errors, in one DB transaction |
 | PATCH | `/api/transactions/:id` | any of `amountMinor`, `description`, `categoryId`, `occurredOn`, `note`, `cardId` | `Transaction`; `409` for a billed installment month (edit its plan) |
 | GET | `/api/categories` | | `CategoryListItem[]`, flat: each with `parentId` (null = top level), its own `transactionCount`, and `color` (a subcategory reports its parent's) |
 | POST | `/api/categories` | top level `{ name, type, color }`, or subcategory `{ name, type, parentId }` (one level; same type as the parent) | `201 CategoryListItem`; `409` if the name exists under that parent or the color is in use |

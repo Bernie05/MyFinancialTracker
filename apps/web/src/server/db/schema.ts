@@ -12,6 +12,7 @@
  */
 import { sql } from "drizzle-orm";
 import { check, index, integer, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
+import type { Split } from "../../shared/split";
 
 export const transactionTypes = ["expense", "income"] as const;
 export type TransactionType = (typeof transactionTypes)[number];
@@ -109,9 +110,17 @@ export const creditCards = sqliteTable(
     /** Same values as categories.color: a preset key or `#rrggbb`. Unique among cards. */
     color: text("color").notNull(),
     archived: integer("archived", { mode: "boolean" }).notNull().default(false),
+    /** Who usually uses the card; its new charges start out as theirs. Null = you. */
+    defaultPersonId: integer("default_person_id").references((): AnySQLiteColumn => people.id, { onDelete: "set null" }),
+    /** JSON `[{ months, addOnRateBps }]`, sorted by months: the terms this card offers and their rates. */
+    installmentRates: text("installment_rates", { mode: "json" })
+      .$type<{ months: number; addOnRateBps: number }[]>()
+      .notNull()
+      .default(sql`'[]'`),
     createdAt: createdAt(),
   },
   (t) => [
+    check("credit_cards_installment_rates_json", sql`json_valid(${t.installmentRates}) and json_type(${t.installmentRates}) = 'array'`),
     uniqueIndex("credit_cards_name_unique").on(t.userId, t.name),
     index("credit_cards_user_idx").on(t.userId),
     uniqueIndex("credit_cards_color_unique").on(t.userId, t.color),
@@ -179,6 +188,8 @@ export const installments = sqliteTable(
     /** `YYYY-MM` whose statement bills month 1. */
     firstBillingMonth: text("first_billing_month").notNull(),
     preterminatedOn: text("preterminated_on"),
+    /** Who the plan is for (shared/split.ts); each billed month is split the same way. Null = all yours. */
+    split: text("split", { mode: "json" }).$type<Split>(),
     createdAt: createdAt(),
   },
   (t) => [
@@ -214,6 +225,10 @@ export const transactions = sqliteTable(
     /** Set on the auto-generated, read-only expense for one billed month of an installment plan. */
     installmentId: integer("installment_id").references((): AnySQLiteColumn => installments.id, { onDelete: "cascade" }),
     installmentSeq: integer("installment_seq"),
+    /** Who it's for (shared/split.ts). Null = all yours. Each other person's part is in transaction_shares. */
+    split: text("split", { mode: "json" }).$type<Split>(),
+    /** Your part of amount_minor: what reports and budgets count. Kept in step with split by the repository. */
+    myShareMinor: integer("my_share_minor").notNull().default(0),
     createdAt: createdAt(),
   },
   (t) => [
@@ -226,6 +241,66 @@ export const transactions = sqliteTable(
     check("transactions_amount_positive", sql`${t.amountMinor} > 0`),
     check("transactions_card_expense_only", sql`${t.cardId} is null or ${t.type} = 'expense'`),
   ],
+);
+
+/**
+ * Someone else whose charges go on your cards (a friend, family). Not an account: they never sign in.
+ * A person with history is archived rather than deleted.
+ */
+export const people = sqliteTable(
+  "people",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references((): AnySQLiteColumn => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    archived: integer("archived", { mode: "boolean" }).notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("people_name_unique").on(t.userId, t.name), index("people_user_idx").on(t.userId)],
+);
+
+/** One person's part of a transaction (your own part is transactions.my_share_minor). Rebuilt whenever the split or amount changes. */
+export const transactionShares = sqliteTable(
+  "transaction_shares",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references((): AnySQLiteColumn => users.id, { onDelete: "cascade" }),
+    transactionId: integer("transaction_id")
+      .notNull()
+      .references(() => transactions.id, { onDelete: "cascade" }),
+    personId: integer("person_id")
+      .notNull()
+      .references(() => people.id, { onDelete: "restrict" }),
+    amountMinor: integer("amount_minor").notNull(),
+  },
+  (t) => [
+    uniqueIndex("transaction_shares_unique").on(t.transactionId, t.personId),
+    index("transaction_shares_person_idx").on(t.personId),
+    check("transaction_shares_amount_nonnegative", sql`${t.amountMinor} >= 0`),
+  ],
+);
+
+/** Money a person paid you back. Lowers what they owe; it isn't income. */
+export const personPayments = sqliteTable(
+  "person_payments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references((): AnySQLiteColumn => users.id, { onDelete: "cascade" }),
+    personId: integer("person_id")
+      .notNull()
+      .references(() => people.id, { onDelete: "restrict" }),
+    amountMinor: integer("amount_minor").notNull(),
+    paidOn: text("paid_on").notNull(),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("person_payments_person_idx").on(t.personId, t.paidOn), check("person_payments_amount_positive", sql`${t.amountMinor} > 0`)],
 );
 
 export const budgets = sqliteTable(

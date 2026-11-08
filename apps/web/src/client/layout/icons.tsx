@@ -157,3 +157,12 @@ export const LogoutIcon = () => (
     <path d="M9 10h8M14 7l3 3-3 3" />
   </Icon>
 );
+
+export const PeopleIcon = () => (
+  <Icon>
+    <circle cx="7.5" cy="7" r="2.75" />
+    <path d="M2.75 16c.4-2.6 2.3-4.25 4.75-4.25s4.35 1.65 4.75 4.25" />
+    <circle cx="14" cy="7.75" r="2.25" />
+    <path d="M13.25 11.85c2.1-.2 3.65 1.15 4 3.4" />
+  </Icon>
+);

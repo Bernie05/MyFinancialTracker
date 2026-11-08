@@ -12,11 +12,16 @@ import type { Category, Month, Transaction } from "../../shared/contracts";
 import { installmentSchedule } from "../../shared/installments";
 import { currentUserId as uid } from "../context";
 import type { Db } from "../db/client";
-import { cardPayments, categories, creditCards, installments, transactions } from "../db/schema";
+import { allocate, type Split } from "../../shared/split";
+import { cardPayments, categories, creditCards, installments, people, personPayments, transactions, transactionShares } from "../db/schema";
 import type {
   CardRepository,
+  CategoryRef,
   CategoryRepository,
+  ImportRepository,
   InstallmentRepository,
+  PeopleRepository,
+  PlanSplit,
   Repositories,
   SummaryRepository,
   TransactionRepository,
@@ -45,6 +50,23 @@ const categoryColumns = {
   color: sql<string>`coalesce(${categories.color}, ${parentCategories.color})`,
   parentId: categories.parentId,
 };
+
+/** A DB handle or an open DB transaction: both run the sync query builders. */
+type Runner = Pick<Db, "insert" | "update" | "delete" | "select">;
+
+/**
+ * Rebuilds one transaction's shares and my_share_minor from its amount and split. Sync: call it inside
+ * the same DB transaction as the write that changed them.
+ */
+function writeShares(run: Runner, userId: number, transactionId: number, amountMinor: number, split: Split | null) {
+  run.delete(transactionShares).where(eq(transactionShares.transactionId, transactionId)).run();
+  let my = 0;
+  for (const part of allocate(amountMinor, split)) {
+    if (part.personId === null) my += part.amountMinor;
+    else run.insert(transactionShares).values({ userId, transactionId, personId: part.personId, amountMinor: part.amountMinor }).run();
+  }
+  run.update(transactions).set({ myShareMinor: my }).where(eq(transactions.id, transactionId)).run();
+}
 
 const mine = {
   categories: () => eq(categories.userId, uid()),
@@ -133,6 +155,8 @@ function createTransactionRepository(db: Db): TransactionRepository {
         category: categoryColumns,
         card: { id: creditCards.id, name: creditCards.name, last4: creditCards.last4, color: creditCards.color },
         installmentId: transactions.installmentId,
+        split: transactions.split,
+        myShareMinor: transactions.myShareMinor,
       })
       .from(transactions)
       .innerJoin(categories, eq(transactions.categoryId, categories.id))
@@ -140,6 +164,24 @@ function createTransactionRepository(db: Db): TransactionRepository {
       .leftJoin(creditCards, eq(transactions.cardId, creditCards.id));
 
   const byId = (id: number) => and(eq(transactions.id, id), mine.transactions());
+
+  /** Adds each row's other-people shares (with names): one query for the whole page. */
+  async function withShares<R extends { id: number }>(rows: R[]): Promise<(R & { shares: Transaction["shares"] })[]> {
+    const ids = rows.map((r) => r.id);
+    const found = ids.length
+      ? await db
+          .select({ transactionId: transactionShares.transactionId, personId: transactionShares.personId, name: people.name, amountMinor: transactionShares.amountMinor })
+          .from(transactionShares)
+          .innerJoin(people, eq(transactionShares.personId, people.id))
+          .where(and(eq(transactionShares.userId, uid()), inArray(transactionShares.transactionId, ids)))
+          .orderBy(asc(transactionShares.id))
+      : [];
+    return rows.map((r) => ({
+      ...r,
+      shares: found.filter((s) => s.transactionId === r.id).map(({ transactionId: _t, ...s }) => s),
+    }));
+  }
+  const one = async (id: number) => (await withShares(await selectWithCategory().where(byId(id))))[0] as Transaction | undefined;
 
   return {
     async list({ type, from, to, categoryId, cardId, installment, q, page, pageSize }) {
@@ -193,7 +235,7 @@ function createTransactionRepository(db: Db): TransactionRepository {
             .orderBy(desc(transactions.occurredOn))
         : [];
       return {
-        items: items as Transaction[],
+        items: (await withShares(items)) as Transaction[],
         days,
         total: agg?.total ?? 0,
         page,
@@ -204,21 +246,34 @@ function createTransactionRepository(db: Db): TransactionRepository {
     },
 
     async create(data) {
-      const [inserted] = await db.insert(transactions).values({ ...data, userId: uid() }).returning({ id: transactions.id });
-      if (!inserted) throw new Error("insert returned no row");
-      const [row] = await selectWithCategory().where(byId(inserted.id));
-      return row as Transaction;
+      const userId = uid();
+      const id = db.transaction((tx) => {
+        const row = tx.insert(transactions).values({ ...data, userId }).returning({ id: transactions.id }).get();
+        writeShares(tx, userId, row.id, data.amountMinor, data.split);
+        return row.id;
+      });
+      return (await one(id))!;
     },
 
-    async findById(id) {
-      const [row] = await selectWithCategory().where(byId(id));
-      return row;
+    findById: one,
+
+    async listEntered() {
+      const rows = await selectWithCategory()
+        .where(and(mine.transactions(), isNull(transactions.installmentId)))
+        .orderBy(asc(transactions.occurredOn), asc(transactions.id));
+      return (await withShares(rows)) as Transaction[];
     },
 
     async update(id, data) {
-      await db.update(transactions).set(data).where(byId(id));
-      const [row] = await selectWithCategory().where(byId(id));
-      return row as Transaction;
+      const userId = uid();
+      db.transaction((tx) => {
+        tx.update(transactions).set(data).where(and(eq(transactions.id, id), eq(transactions.userId, userId))).run();
+        if (data.amountMinor !== undefined || data.split !== undefined) {
+          const row = tx.select({ amountMinor: transactions.amountMinor, split: transactions.split }).from(transactions).where(eq(transactions.id, id)).get();
+          if (row) writeShares(tx, userId, id, row.amountMinor, row.split);
+        }
+      });
+      return (await one(id))!;
     },
 
     async remove(id) {
@@ -242,23 +297,26 @@ function createSummaryRepository(db: Db): SummaryRepository {
         cardId ? eq(transactions.cardId, cardId) : undefined,
       );
 
+      // Your own spending counts only your share; a single card's view shows its full charges.
+      const spent = cardId ? transactions.amountMinor : transactions.myShareMinor;
       // The database does the arithmetic: one pass for totals, one GROUP BY for categories.
       const [totals] = await db
         .select({
           incomeMinor: sql<number>`coalesce(sum(case when ${transactions.type} = 'income' then ${transactions.amountMinor} end), 0)`,
-          expenseMinor: sql<number>`coalesce(sum(case when ${transactions.type} = 'expense' then ${transactions.amountMinor} end), 0)`,
+          expenseMinor: sql<number>`coalesce(sum(case when ${transactions.type} = 'expense' then ${spent} end), 0)`,
         })
         .from(transactions)
         .where(inMonth);
 
       // Per leaf category in SQL, then rolled up to parents here (children keep the breakdown).
       const byLeaf = await db
-        .select({ category: categoryColumns, totalMinor: sql<number>`sum(${transactions.amountMinor})` })
+        .select({ category: categoryColumns, totalMinor: sql<number>`sum(${spent})` })
         .from(transactions)
         .innerJoin(categories, eq(transactions.categoryId, categories.id))
         .leftJoin(parentCategories, withParent)
         .where(and(inMonth, eq(transactions.type, "expense")))
-        .groupBy(categories.id);
+        .groupBy(categories.id)
+        .having(sql`sum(${spent}) > 0`); // a category with only friends' charges isn't your spending
       const parentIds = [...new Set(byLeaf.map((r) => r.category.parentId).filter((id): id is number => id !== null))];
       const parents = parentIds.length
         ? await db
@@ -298,11 +356,12 @@ function createSummaryRepository(db: Db): SummaryRepository {
     async monthly(to, months, cardId) {
       const first = shiftMonth(to, 1 - months);
       const month = sql<string>`substr(${transactions.occurredOn}, 1, 7)`;
+      const spent = cardId ? transactions.amountMinor : transactions.myShareMinor;
       const rows = await db
         .select({
           month,
           incomeMinor: sql<number>`coalesce(sum(case when ${transactions.type} = 'income' then ${transactions.amountMinor} end), 0)`,
-          expenseMinor: sql<number>`coalesce(sum(case when ${transactions.type} = 'expense' then ${transactions.amountMinor} end), 0)`,
+          expenseMinor: sql<number>`coalesce(sum(case when ${transactions.type} = 'expense' then ${spent} end), 0)`,
         })
         .from(transactions)
         .where(
@@ -423,6 +482,7 @@ function createInstallmentRepository(db: Db): InstallmentRepository {
         feeMinor: installments.feeMinor,
         firstBillingMonth: installments.firstBillingMonth,
         preterminatedOn: installments.preterminatedOn,
+        split: installments.split,
         closingDay: creditCards.closingDay,
       })
       .from(installments)
@@ -466,10 +526,15 @@ function createInstallmentRepository(db: Db): InstallmentRepository {
           cardId: plan.cardId,
           installmentId: plan.id,
           installmentSeq: entry.seq,
+          split: plan.split,
         });
       }
     }
-    if (rows.length > 0) db.insert(transactions).values(rows).run();
+    // One at a time: each billed month gets its own shares, split like the plan.
+    for (const row of rows) {
+      const { id } = db.insert(transactions).values(row).returning({ id: transactions.id }).get();
+      writeShares(db, userId, id, row.amountMinor, row.split ?? null);
+    }
   }
 
   return {
@@ -479,6 +544,9 @@ function createInstallmentRepository(db: Db): InstallmentRepository {
           .where(and(eq(installments.cardId, cardId), mine.installments()))
           .orderBy(desc(installments.purchasedOn), desc(installments.id))
       ).map(strip);
+    },
+    async listAll() {
+      return (await select().where(mine.installments()).orderBy(asc(installments.cardId), asc(installments.purchasedOn), asc(installments.id))).map(strip);
     },
     async countForCategory(categoryId) {
       const [row] = await db
@@ -503,7 +571,7 @@ function createInstallmentRepository(db: Db): InstallmentRepository {
       await db.delete(installments).where(byId(id));
     },
     async sync(today) {
-      syncNow(today);
+      db.transaction(() => syncNow(today));
     },
     async regenerate(ids, today) {
       if (ids.length === 0) return;
@@ -516,8 +584,165 @@ function createInstallmentRepository(db: Db): InstallmentRepository {
   };
 }
 
+/** Applies a checked import plan in one DB transaction: all of it, or (on any failure) none of it. */
+function createImportRepository(db: Db): ImportRepository {
+  return {
+    async apply(plan) {
+      const userId = uid();
+      return db.transaction((tx) => {
+        const created = new Map<string, number>();
+        const resolve = (ref: CategoryRef) => {
+          if (typeof ref === "number") return ref;
+          const id = created.get(ref);
+          if (id === undefined) throw new Error(`import: unknown new category ${ref}`);
+          return id;
+        };
+        // Parents come before their children in the plan.
+        for (const c of plan.newCategories) {
+          const row = tx
+            .insert(categories)
+            .values({ userId, name: c.name, type: c.type, color: c.color, parentId: c.parent === null ? null : resolve(c.parent) })
+            .returning({ id: categories.id })
+            .get();
+          created.set(c.key, row.id);
+        }
+        // New people the "For" column named, then splits that point at them by key.
+        const createdPeople = new Map<string, number>();
+        for (const p of plan.newPeople) {
+          createdPeople.set(p.key, tx.insert(people).values({ userId, name: p.name }).returning({ id: people.id }).get().id);
+        }
+        const resolveSplit = (split: PlanSplit | null): Split | null =>
+          split && {
+            mode: split.mode,
+            parts: split.parts.map((part) => ({
+              value: part.value,
+              personId: typeof part.person === "string" ? createdPeople.get(part.person)! : part.person,
+            })),
+          };
+
+        for (const { category, split, ...t } of plan.addTransactions) {
+          const resolved = resolveSplit(split);
+          const row = tx.insert(transactions).values({ ...t, split: resolved, categoryId: resolve(category), userId }).returning({ id: transactions.id }).get();
+          writeShares(tx, userId, row.id, t.amountMinor, resolved);
+        }
+        for (const { id, category, split, ...t } of plan.updateTransactions) {
+          const set = { ...t, ...(category !== undefined && { categoryId: resolve(category) }), ...(split !== undefined && { split: resolveSplit(split) }) };
+          if (Object.keys(set).length > 0) {
+            tx.update(transactions).set(set).where(and(eq(transactions.id, id), eq(transactions.userId, userId), isNull(transactions.installmentId))).run();
+          }
+          if (t.amountMinor !== undefined || split !== undefined) {
+            const row = tx.select({ amountMinor: transactions.amountMinor, split: transactions.split }).from(transactions).where(eq(transactions.id, id)).get();
+            if (row) writeShares(tx, userId, id, row.amountMinor, row.split);
+          }
+        }
+        const installmentIds: number[] = [];
+        for (const { category, split, ...p } of plan.addInstallments) {
+          const row = tx
+            .insert(installments)
+            .values({ ...p, split: resolveSplit(split), categoryId: resolve(category), userId })
+            .returning({ id: installments.id })
+            .get();
+          installmentIds.push(row.id);
+        }
+        for (const { id, category, split, ...p } of plan.updateInstallments) {
+          const set = { ...p, ...(category !== undefined && { categoryId: resolve(category) }), ...(split !== undefined && { split: resolveSplit(split) }) };
+          tx.update(installments).set(set).where(and(eq(installments.id, id), eq(installments.userId, userId))).run();
+          installmentIds.push(id);
+        }
+        return { installmentIds };
+      });
+    },
+  };
+}
+
+function createPeopleRepository(db: Db): PeopleRepository {
+  // Totals by correlated subquery: one row per person, no N+1. Spelled out with aliases because Drizzle
+  // leaves columns unqualified in a single-table select, and a bare "id" inside would be the subquery's own.
+  const charged = sql<number>`coalesce((select sum(ts.amount_minor) from transaction_shares ts where ts.person_id = "people"."id"), 0)`;
+  const shareCount = sql<number>`(select count(*) from transaction_shares ts where ts.person_id = "people"."id")`;
+  const straight = sql<number>`coalesce((select sum(ts.amount_minor) from transaction_shares ts join transactions t on t.id = ts.transaction_id where ts.person_id = "people"."id" and t.installment_id is null), 0)`;
+  const repaid = sql<number>`coalesce((select sum(pp.amount_minor) from person_payments pp where pp.person_id = "people"."id"), 0)`;
+  const select = () =>
+    db.select({ id: people.id, name: people.name, archived: people.archived, chargedMinor: charged, straightMinor: straight, repaidMinor: repaid, shareCount }).from(people);
+  const withBalance = <R extends { chargedMinor: number; straightMinor: number; repaidMinor: number }>(r: R) => ({
+    ...r,
+    installmentBilledMinor: r.chargedMinor - r.straightMinor,
+    balanceMinor: r.chargedMinor - r.repaidMinor,
+  });
+  const byId = (id: number) => and(eq(people.id, id), eq(people.userId, uid()));
+
+  return {
+    async list() {
+      return (await select().where(eq(people.userId, uid())).orderBy(asc(people.archived), asc(people.name))).map(withBalance);
+    },
+    async findById(id) {
+      const [row] = await select().where(byId(id));
+      return row && withBalance(row);
+    },
+    async findByName(name) {
+      const [row] = await db
+        .select({ id: people.id, name: people.name, archived: people.archived })
+        .from(people)
+        .where(and(eq(people.userId, uid()), sql`lower(${people.name}) = lower(${name})`));
+      return row;
+    },
+    async create(name) {
+      const [row] = await db.insert(people).values({ userId: uid(), name }).returning({ id: people.id });
+      return (await this.findById(row!.id))!;
+    },
+    async update(id, data) {
+      await db.update(people).set(data).where(byId(id));
+      return (await this.findById(id))!;
+    },
+    async remove(id) {
+      await db.delete(people).where(byId(id));
+    },
+    async shares(personId) {
+      const rows = await db
+        .select({
+          transactionId: transactions.id,
+          occurredOn: transactions.occurredOn,
+          description: transactions.description,
+          totalMinor: transactions.amountMinor,
+          amountMinor: transactionShares.amountMinor,
+          card: { id: creditCards.id, name: creditCards.name },
+          installmentId: transactions.installmentId,
+        })
+        .from(transactionShares)
+        .innerJoin(transactions, eq(transactionShares.transactionId, transactions.id))
+        .leftJoin(creditCards, eq(transactions.cardId, creditCards.id))
+        .where(and(eq(transactionShares.personId, personId), eq(transactionShares.userId, uid())))
+        .orderBy(desc(transactions.occurredOn), desc(transactions.id));
+      return rows;
+    },
+    async payments(personId) {
+      return db
+        .select({ id: personPayments.id, personId: personPayments.personId, amountMinor: personPayments.amountMinor, paidOn: personPayments.paidOn, note: personPayments.note })
+        .from(personPayments)
+        .where(and(eq(personPayments.personId, personId), eq(personPayments.userId, uid())))
+        .orderBy(desc(personPayments.paidOn), desc(personPayments.id));
+    },
+    async addPayment(personId, data) {
+      const [row] = await db
+        .insert(personPayments)
+        .values({ userId: uid(), personId, ...data })
+        .returning({ id: personPayments.id, personId: personPayments.personId, amountMinor: personPayments.amountMinor, paidOn: personPayments.paidOn, note: personPayments.note });
+      return row!;
+    },
+    async removePayment(personId, paymentId) {
+      const gone = await db
+        .delete(personPayments)
+        .where(and(eq(personPayments.id, paymentId), eq(personPayments.personId, personId), eq(personPayments.userId, uid())))
+        .returning({ id: personPayments.id });
+      return gone.length > 0;
+    },
+  };
+}
+
 export function createDrizzleRepositories(db: Db): Repositories {
   return {
+    people: createPeopleRepository(db),
+    imports: createImportRepository(db),
     categories: createCategoryRepository(db),
     transactions: createTransactionRepository(db),
     summary: createSummaryRepository(db),

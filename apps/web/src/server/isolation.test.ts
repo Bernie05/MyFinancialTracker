@@ -4,7 +4,7 @@
  * and the gate must refuse anonymous and cross-site requests.
  */
 import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
-import { createAppRoutes, MAX_REQUEST_BODY } from "./app";
+import { createAppRoutes, MAX_IMPORT_BODY } from "./app";
 import { createDb } from "./db/client";
 import { runMigrations } from "./db/migrations";
 
@@ -14,7 +14,7 @@ let base: string;
 beforeAll(() => {
   const db = createDb(":memory:");
   runMigrations(db);
-  server = Bun.serve({ port: 0, routes: createAppRoutes(db), maxRequestBodySize: MAX_REQUEST_BODY });
+  server = Bun.serve({ port: 0, routes: createAppRoutes(db), maxRequestBodySize: MAX_IMPORT_BODY });
   base = server.url.origin;
 });
 afterAll(() => server.stop(true));

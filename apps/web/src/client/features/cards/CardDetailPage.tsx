@@ -49,6 +49,7 @@ export function CardDetailPage({ id }: { id: number }) {
     payments.reload();
     monthly.reload();
     byCategory.reload();
+    categories.reload(); // the installment form can add categories
     refreshAlerts();
   }
 
