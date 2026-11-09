@@ -81,7 +81,7 @@ export function OtherCharges({ card, categories, cards, onChanged }: OtherCharge
           </button>
         </nav>
         <span className="oc-toolbar__actions">
-          <a className="link-text" href={`/expenses?range=all&cardId=${card.id}`} onClick={linkClick}>
+          <a className="link-text" href={`/expenses/all?range=all&cardId=${card.id}`} onClick={linkClick}>
             View all charges
           </a>
           <Button size="sm" iconStart={<PlusIcon />} onClick={() => setAdding(true)} disabled={card.archived}>
@@ -161,7 +161,7 @@ export function OtherCharges({ card, categories, cards, onChanged }: OtherCharge
               {result.total > result.items.length && (
                 <p className="oc-more">
                   Showing the newest {result.items.length} of {result.total}.{" "}
-                  <a className="link-text" href={`/expenses?range=custom&from=${from}&to=${to}&cardId=${card.id}`} onClick={linkClick}>
+                  <a className="link-text" href={`/expenses/all?range=custom&from=${from}&to=${to}&cardId=${card.id}`} onClick={linkClick}>
                     See them all
                   </a>
                 </p>
@@ -177,7 +177,9 @@ export function OtherCharges({ card, categories, cards, onChanged }: OtherCharge
           <AddTransactionForm
             type="expense"
             categories={categories}
-            cards={cards.filter((c) => !c.archived)}
+            // Only this section's kind: online credit accounts here, or bank cards on a bank card.
+            cards={cards.filter((c) => !c.archived && c.kind === card.kind)}
+            allowCash={false}
             defaultCardId={card.id}
             onAdded={(message) => {
               setAdding(false);
@@ -192,7 +194,8 @@ export function OtherCharges({ card, categories, cards, onChanged }: OtherCharge
       <EditTransactionDialog
         transaction={editing}
         categories={categories}
-        cards={cards}
+        cards={cards.filter((c) => c.kind === card.kind)}
+        allowCash={false}
         onClose={() => setEditing(null)}
         onSaved={(message) => {
           setEditing(null);

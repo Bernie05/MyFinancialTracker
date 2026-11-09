@@ -1,5 +1,6 @@
 import { Amount, Button, Card, formatMoney, ProgressMeter, SegmentedControl } from "@mft/ui";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { cardPath, cardsHome } from "../../lib/cardPaths";
 import { api } from "../../api/endpoints";
 import { Dialog } from "../../layout/Dialog";
 import { EmptyState } from "../../layout/EmptyState";
@@ -40,6 +41,16 @@ export function CardDetailPage({ id }: { id: number }) {
   const [dialog, setDialog] = useState<"edit" | "pay" | null>(null);
   const [announcement, setAnnouncement] = useState("");
 
+  // Links that only know the id (alerts, people) use /cards/<id>; an online credit line moves to
+  // /online-credit/<id> once loaded (and back, if its type changes), so the sidebar marks the right section.
+  const loaded = card.state.data;
+  // Back to the list this account belongs to (known from the URL until the card loads).
+  const home = loaded ? cardsHome(loaded.kind) : window.location.pathname.startsWith("/online-credit") ? "/online-credit" : "/cards";
+  const back = { href: home, label: home === "/online-credit" ? "Online Credit" : "Credit Cards" };
+  useEffect(() => {
+    if (loaded && !window.location.pathname.startsWith(`${cardsHome(loaded.kind)}/`)) navigate(cardPath(loaded), { replace: true });
+  }, [loaded?.kind]);
+
   // Anything that changes what's owed reloads the card, its numbers and the alert bell.
   function changed(message: string) {
     if (dialog) setDialog(null);
@@ -56,7 +67,7 @@ export function CardDetailPage({ id }: { id: number }) {
   if (card.state.status === "error") {
     return (
       <div className="page">
-        <PageHeader title="Credit card" />
+        <PageHeader title="Credit card" back={back} />
         <section className="panel panel--empty" aria-label="Card not found">
           <EmptyState
             tone="error"
@@ -77,7 +88,7 @@ export function CardDetailPage({ id }: { id: number }) {
   if (!c) {
     return (
       <div className="page">
-        <PageHeader title="Credit card" />
+        <PageHeader title="Credit card" back={back} />
         <Loadable state={card.state} reload={card.reload} what="the card" skeleton="bars">
           {() => null}
         </Loadable>
@@ -90,11 +101,12 @@ export function CardDetailPage({ id }: { id: number }) {
   return (
     <div className="page">
       <PageHeader
+        back={back}
         title={c.name}
-        subtitle={[c.issuer, c.last4 && `ending in ${c.last4}`, c.archived && "Archived"].filter(Boolean).join(" · ") || "Credit card"}
+        subtitle={[c.issuer, c.last4 && `ending in ${c.last4}`, c.archived && "Archived"].filter(Boolean).join(" · ") || (c.kind === "online" ? "Online credit" : "Credit card")}
         actions={
           <Button variant="secondary" onClick={() => setDialog("edit")}>
-            Edit card
+            {c.kind === "online" ? "Edit account" : "Edit card"}
           </Button>
         }
       />
@@ -198,7 +210,7 @@ export function CardDetailPage({ id }: { id: number }) {
             card={c}
             all={allCards.state.data ?? []}
             onSaved={(message) => changed(message)}
-            onDeleted={() => navigate("/cards")}
+            onDeleted={() => navigate(cardsHome(c.kind))}
             onCancel={() => setDialog(null)}
           />
         )}

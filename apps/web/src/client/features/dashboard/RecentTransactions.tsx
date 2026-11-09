@@ -47,6 +47,7 @@ function setParams(changes: Record<string, string | undefined>) {
 /** The same dates on a ledger page: its own presets cover today/week/month, custom carries from/to. */
 function ledgerLink(path: string, period: Period, from?: string, to?: string) {
   const q = new URLSearchParams(period === "custom" ? { range: "custom", ...(from && { from }), ...(to && { to }) } : period === "month" ? {} : { range: period });
+  q.set("all", "1"); // every expense or income, not just the page's own scope (cash only, no salary)
   return `${path}${q.size ? `?${q}` : ""}`;
 }
 
@@ -65,13 +66,13 @@ export function RecentTransactions(props: RecentTransactionsProps) {
     <span className="card-links">
       View all in{" "}
       {type !== "income" && (
-        <a href={ledgerLink("/expenses", period, from, to)} onClick={linkClick}>
+        <a href={ledgerLink("/expenses/all", period, from, to)} onClick={linkClick}>
           Expenses
         </a>
       )}
       {!type && " or "}
       {type !== "expense" && (
-        <a href={ledgerLink("/income", period, from, to)} onClick={linkClick}>
+        <a href={ledgerLink("/income/other", period, from, to)} onClick={linkClick}>
           Income
         </a>
       )}

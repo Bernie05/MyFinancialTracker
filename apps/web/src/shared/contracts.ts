@@ -213,12 +213,19 @@ export const personPaymentSchema = z.object({
   amountMinor: z.number().int(),
   paidOn: dateSchema,
   note: z.string().nullable(),
+  /** What this repayment is for: a plan (`p<installmentId>`), one month of it (`p<installmentId>-<seq>`), a charge (`t<transactionId>`), or null for whatever is oldest. */
+  itemKey: z.string().nullable(),
 });
 export type PersonPayment = z.infer<typeof personPaymentSchema>;
 export const newPersonPaymentSchema = z.object({
   amountMinor: amountMinorSchema,
   paidOn: dateSchema,
   note: z.string().trim().max(200).nullish().transform((v) => v || null),
+  itemKey: z
+    .string()
+    .regex(/^(p\d{1,12}(-\d{1,4})?|t\d{1,12})$/, "Pick an item from the list.")
+    .nullish()
+    .transform((v) => v ?? null),
 });
 export type NewPersonPayment = z.input<typeof newPersonPaymentSchema>;
 
@@ -231,6 +238,7 @@ export const personShareSchema = z.object({
   amountMinor: z.number().int(),
   card: z.object({ id: z.number().int(), name: z.string() }).nullable(),
   installmentId: z.number().int().nullable(),
+  installmentSeq: z.number().int().nullable(),
 });
 export type PersonShare = z.infer<typeof personShareSchema>;
 
@@ -275,8 +283,12 @@ export const personBillingSchema = z.object({
       installmentId: z.number().int().nullable(),
       /** An installment month not billed yet (it's on a future statement). */
       upcoming: z.boolean(),
-      /** Fully covered by their repayments (applied oldest first). */
+      /** Fully covered by their repayments (each item's own first, then the rest oldest first). */
       paid: z.boolean(),
+      /** Stable across billing: `p<installmentId>-<seq>` for an installment month, else `t<transactionId>`. */
+      monthKey: z.string(),
+      /** How much of `amountMinor` their repayments cover. */
+      paidMinor: z.number().int(),
     }),
   ),
   amountMinor: z.number().int(),
@@ -353,6 +365,13 @@ export const updateTransactionSchema = z
   .refine((v) => Object.keys(v).length > 0, "Change at least one field.");
 export type UpdateTransaction = z.input<typeof updateTransactionSchema>;
 
+/**
+ * How an expense was paid: "cash" = no card (cash, debit, e-wallet balance); "bank" = a bank credit card;
+ * "online" = an online credit line (SPayLater, Lazada PayLater, Home Credit).
+ */
+export const paidWithSchema = z.enum(["cash", "bank", "online"]);
+export type PaidWith = z.infer<typeof paidWithSchema>;
+
 /** `cardId` narrows a summary to one credit card's charges. */
 export const monthQuerySchema = z.object({ month: monthSchema, cardId: idSchema.optional() });
 
@@ -366,6 +385,10 @@ export const transactionQuerySchema = z
     to: dateSchema.optional(),
     categoryId: idSchema.optional(),
     cardId: idSchema.optional(),
+    /** "cash": not charged to any card (cash, debit, e-wallet balance). */
+    paidWith: paidWithSchema.optional(),
+    /** Leaves out this category and its subcategories (Other Income leaves out Salary). */
+    excludeCategoryId: idSchema.optional(),
     /** "none": regular charges only; "only": billed installment months only. */
     installment: z.enum(["none", "only"]).optional(),
     q: z.string().trim().max(100, "Keep the search under 100 characters.").optional().transform((v) => v || undefined),
@@ -415,9 +438,17 @@ export type MonthSummary = z.infer<typeof monthSummarySchema>;
 /** `?to=YYYY-MM&months=6`: the `months` calendar months ending with `to`, oldest first. */
 export const monthlyQuerySchema = z.object({
   to: monthSchema,
-  months: z.coerce.number().int().min(1).max(24).default(6),
+  /** Up to five years, for the dashboard's yearly view. */
+  months: z.coerce.number().int().min(1).max(60).default(6),
   cardId: idSchema.optional(),
+  /** Only this category (and its subcategories): Salary on the Income overview. */
+  categoryId: idSchema.optional(),
+  /** Everything but this category tree: other income. */
+  excludeCategoryId: idSchema.optional(),
+  /** Only expenses paid this way (see paidWithSchema). */
+  paidWith: paidWithSchema.optional(),
 });
+export type MonthlyFilters = Pick<z.output<typeof monthlyQuerySchema>, "cardId" | "categoryId" | "excludeCategoryId" | "paidWith">;
 
 export const monthTotalsSchema = z.object({
   month: monthSchema,
@@ -425,6 +456,16 @@ export const monthTotalsSchema = z.object({
   expenseMinor: z.number().int(),
 });
 export type MonthTotals = z.infer<typeof monthTotalsSchema>;
+
+/** `?from=YYYY-MM&to=YYYY-MM`: whole calendar months, both ends included (a quarter, a year). At most ten years. */
+export const rangeQuerySchema = z
+  .object({ from: monthSchema, to: monthSchema })
+  .refine((v) => v.from <= v.to, { path: ["to"], message: "The end month is before the start month." })
+  .refine((v) => Number(v.to.slice(0, 4)) - Number(v.from.slice(0, 4)) < 10, { path: ["from"], message: "Pick at most ten years." });
+
+/** A summary over several months: the same totals and category split as a month's, labelled by its first and last month. */
+export const rangeSummarySchema = monthSummarySchema.omit({ month: true }).extend({ from: monthSchema, to: monthSchema });
+export type RangeSummary = z.infer<typeof rangeSummarySchema>;
 
 // Credit cards ----------------------------------------------------------------
 
@@ -454,7 +495,13 @@ export const installmentRatesSchema = z
   .transform((rates) => [...rates].sort((a, b) => a.months - b.months));
 
 // Shared fields; defaults belong only to create, so a PATCH never resets a field it didn't send.
+/** "bank": a bank-issued credit card (BPI, Metrobank). "online": an online credit line (SPayLater, Lazada PayLater, Home Credit). */
+export const cardKinds = ["bank", "online"] as const;
+export const cardKindSchema = z.enum(cardKinds);
+export type CardKind = z.infer<typeof cardKindSchema>;
+
 const cardFields = z.object({
+  kind: cardKindSchema,
   name: z.string().trim().min(1, "Add a name.").max(40, "Keep it under 40 characters."),
   issuer: z.string().trim().max(40, "Keep it under 40 characters.").nullish().transform((v) => v || null),
   /** Only the last 4 digits, never a full card number. */
@@ -475,6 +522,7 @@ const cardFields = z.object({
 });
 
 export const newCardSchema = cardFields.extend({
+  kind: cardKindSchema.default("bank"),
   notifyDays: notifyDaysSchema.default(3),
   installmentRates: installmentRatesSchema.default([]),
   defaultPersonId: z.number().int().positive().nullish().transform((v) => v ?? null),
@@ -491,6 +539,7 @@ export const cardStatusSchema = z.enum(["upcoming", "due_soon", "overdue", "paid
 
 export const cardSchema = z.object({
   id: z.number().int(),
+  kind: cardKindSchema,
   name: z.string(),
   issuer: z.string().nullable(),
   last4: z.string().nullable(),
@@ -550,6 +599,17 @@ export type NewCardPayment = z.input<typeof newCardPaymentSchema>;
 
 // Installments ----------------------------------------------------------------
 
+/** What kind of loan a plan is. Null = an ordinary installment purchase. */
+export const loanTypes = ["online", "bank", "personal", "debit"] as const;
+export const loanTypeSchema = z.enum(loanTypes);
+export type LoanType = z.infer<typeof loanTypeSchema>;
+export const loanTypeLabels: Record<LoanType, string> = {
+  online: "Online loan",
+  bank: "Bank credit loan",
+  personal: "Personal loan",
+  debit: "Debit card",
+};
+
 const installmentFields = z.object({
   description: z.string().trim().min(1, "Add a description.").max(80, "Keep it under 80 characters."),
   categoryId: z.number().int().positive("Choose a category."),
@@ -566,6 +626,8 @@ const installmentFields = z.object({
   preterminatedOn: dateSchema.nullable(),
   /** Who the plan is for; each billed month splits the same way. Null = all yours. */
   split: splitSchema.nullable(),
+  /** Set when the plan is a loan (SLoan, a bank cash loan…); null = an installment purchase. */
+  loanType: loanTypeSchema.nullable(),
 });
 
 const purchaseRules = <T extends { purchasedOn?: string; firstBillingMonth?: string; preterminatedOn?: string | null }>(v: T, ctx: z.RefinementCtx) => {
@@ -586,6 +648,7 @@ export const newInstallmentSchema = installmentFields
     firstBillingMonth: monthSchema.optional(),
     preterminatedOn: dateSchema.nullish().transform((v) => v ?? null),
     split: splitSchema.nullish().transform((v) => v ?? null),
+    loanType: loanTypeSchema.nullish().transform((v) => v ?? null),
   })
   .superRefine(purchaseRules);
 export type NewInstallment = z.input<typeof newInstallmentSchema>;
@@ -623,6 +686,7 @@ export const installmentSchema = z.object({
   firstBillingMonth: monthSchema,
   preterminatedOn: dateSchema.nullable(),
   split: splitSchema.nullable(),
+  loanType: loanTypeSchema.nullable(),
   // Derived from the terms (shared/installments.ts):
   monthlyMinor: z.number().int(),
   totalMinor: z.number().int(),
@@ -676,6 +740,49 @@ export type ChangePassword = z.input<typeof changePasswordSchema>;
 
 export const userSchema = z.object({ id: z.number().int(), email: z.string() });
 export type User = z.infer<typeof userSchema>;
+
+// Salary ----------------------------------------------------------------------
+
+/** What comes off a payslip. The four statutory ones appear once each; "other" can repeat (loans, HMO, union dues). */
+export const salaryDeductionKinds = ["tax", "sss", "philhealth", "pagibig", "other"] as const;
+export const salaryDeductionKindSchema = z.enum(salaryDeductionKinds);
+export type SalaryDeductionKind = z.infer<typeof salaryDeductionKindSchema>;
+export const salaryBasisSchema = z.enum(["monthly", "annual"]);
+export type SalaryBasis = z.infer<typeof salaryBasisSchema>;
+
+export const salaryDeductionSchema = z.object({
+  kind: salaryDeductionKindSchema,
+  name: z.string().trim().min(1, "Name this deduction.").max(60, "Keep the name under 60 characters."),
+  /** Per month. Zero is allowed: a contribution you don't pay yet keeps its row. */
+  amountMinor: z.number().int("Amounts are whole centavos.").min(0, "Use ₱0 or more.").max(MAX_MINOR, "That amount is too large."),
+});
+export type SalaryDeduction = z.infer<typeof salaryDeductionSchema>;
+
+/** `basis` is how you entered the gross pay: "monthly" (₱50,000 a month) or "annual" (₱600,000 a year). Deductions are always per month. */
+export const salaryInputSchema = z
+  .object({
+    basis: salaryBasisSchema,
+    grossMinor: amountMinorSchema,
+    deductions: z.array(salaryDeductionSchema).max(30, "At most 30 deductions."),
+  })
+  .superRefine((v, ctx) => {
+    for (const kind of ["tax", "sss", "philhealth", "pagibig"] as const) {
+      if (v.deductions.filter((d) => d.kind === kind).length > 1) {
+        ctx.addIssue({ code: "custom", path: ["deductions"], message: `List each statutory deduction once (${kind} appears twice).` });
+      }
+    }
+  });
+export type SalaryInput = z.input<typeof salaryInputSchema>;
+
+export const salaryProfileSchema = z.object({
+  basis: salaryBasisSchema,
+  grossMinor: z.number().int(),
+  deductions: z.array(salaryDeductionSchema),
+});
+export type SalaryProfile = z.infer<typeof salaryProfileSchema>;
+
+/** GET /api/salary: `profile` is null until you set it up. */
+export const salaryResponseSchema = z.object({ profile: salaryProfileSchema.nullable() });
 
 // Errors ----------------------------------------------------------------------
 

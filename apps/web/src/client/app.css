@@ -185,7 +185,7 @@ a {
 }
 
 .sidebar__group {
-  margin: var(--space-6) 0 var(--space-2);
+  margin: var(--space-5) 0 var(--space-2);
   padding: 0 var(--space-3);
   color: var(--ink-muted);
   font-size: var(--type-label-size);
@@ -1036,7 +1036,14 @@ a {
 
 @keyframes skeleton-pulse {
   50% {
-    opacity: 0.5;
+    background-color: color-mix(in srgb, var(--surface-sunken) 45%, transparent);
+  }
+}
+
+/* Placeholders wait 0.2s before showing: a fast load never flashes grey, a slow one still gets feedback. */
+@keyframes skeleton-appear {
+  from {
+    opacity: 0;
   }
 }
 
@@ -3467,4 +3474,1563 @@ mark {
 .share-row--current {
   box-shadow: inset 3px 0 0 var(--accent);
   font-weight: 650;
+}
+
+/* Items on a person's page: the plan link sits left of the Full paid button. */
+.item__link {
+  margin-right: auto;
+  align-self: center;
+  font-size: var(--type-label-size);
+}
+
+/* A month row with a "Paid" or "Undo" button at the end. */
+.plan .share-row--action,
+.item .share-row--action {
+  grid-template-columns: 64px minmax(0, 1fr) auto auto 72px;
+}
+
+.share-row__action {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 520px) {
+  .item .share-row--action {
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+  }
+  .item .share-row--action .bill-badge {
+    display: none;
+  }
+  .item .share-row--action .share-row__action {
+    grid-column: 2 / -1;
+  }
+}
+
+/* An item's header: arrow, name and totals, then its "Full paid" button. */
+.item > .bill__head {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.item__head-action {
+  display: flex;
+  justify-content: flex-end;
+  cursor: default;
+}
+
+@media (max-width: 520px) {
+  .item > .bill__head {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .item > .bill__head .item__head-action {
+    grid-column: 2 / -1;
+  }
+}
+
+/* ---------- Dashboard: period picker, month + year tiles, upcoming dues ---------- */
+
+/* The app name with its version on the line below. */
+.sidebar__name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.sidebar__version {
+  margin-top: 2px;
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.dash-period .mft-field {
+  min-width: 128px;
+}
+
+.dash-period .mft-select:last-of-type {
+  min-width: 96px;
+}
+
+.period-tile__value {
+  display: flex;
+  align-items: baseline;
+}
+
+.period-tile--good .period-tile__value {
+  color: var(--income);
+}
+
+.period-tile--bad .period-tile__value {
+  color: var(--expense);
+}
+
+.period-tile__year {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line);
+  color: var(--ink-muted);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+}
+
+.period-tile__year > span:first-child {
+  font-weight: 550;
+}
+
+.period-tile__year .mft-amount {
+  color: var(--ink);
+}
+
+.period-tile__rate {
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.period-tile__rate--good {
+  color: var(--income);
+}
+
+.period-tile__rate--bad {
+  color: var(--expense);
+}
+
+.dues {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dues__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+}
+
+.dues li:last-child .dues__row {
+  border-bottom: 0;
+}
+
+.dues__row:hover .dues__name {
+  text-decoration: underline;
+}
+
+.dues__date {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.dues__date strong {
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.dues__row--soon .dues__date {
+  background: var(--marigold-soft);
+  color: var(--marigold-ink);
+}
+
+.dues__row--overdue .dues__date {
+  background: var(--expense-soft);
+  color: var(--expense);
+}
+
+.dues__row--overdue .dues__date strong,
+.dues__row--overdue .dues__when {
+  color: var(--expense);
+}
+
+.dues__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dues__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dues__last4 {
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+
+.dues__when {
+  color: var(--ink-muted);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+}
+
+/* ---------- My Salary ---------- */
+
+.salary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.salary__headline {
+  display: grid;
+  gap: var(--space-4);
+}
+
+@media (min-width: 640px) {
+  .salary__headline .overview__tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .salary__headline {
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+    gap: var(--space-5);
+  }
+  .salary__headline .overview__tiles {
+    grid-template-columns: 1fr;
+  }
+}
+
+.salary__hero {
+  min-height: 220px;
+}
+
+.salary__section-title {
+  margin: 0 0 calc(-1 * var(--space-2));
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.salary__tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+@media (min-width: 960px) {
+  .salary__tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+}
+
+.salary-tile {
+  border-top: 4px solid var(--salary-color, var(--line-strong));
+}
+
+.salary-tile--tax,
+.salary-swatch--tax,
+.salary-bar__part--tax {
+  --salary-color: var(--chart-1);
+}
+.salary-tile--sss,
+.salary-swatch--sss,
+.salary-bar__part--sss {
+  --salary-color: var(--chart-2);
+}
+.salary-tile--philhealth,
+.salary-swatch--philhealth,
+.salary-bar__part--philhealth {
+  --salary-color: var(--chart-5);
+}
+.salary-tile--pagibig,
+.salary-swatch--pagibig,
+.salary-bar__part--pagibig {
+  --salary-color: var(--chart-4);
+}
+.salary-swatch--other,
+.salary-bar__part--other {
+  --salary-color: var(--chart-6);
+}
+.salary-swatch--net,
+.salary-bar__part--net {
+  --salary-color: var(--income);
+}
+
+.salary-bar {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  margin: 0 var(--space-5) var(--space-4);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.salary-bar__part {
+  min-width: 3px;
+  background: var(--salary-color);
+}
+
+.salary-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: var(--space-1);
+  border-radius: 3px;
+  background: var(--salary-color);
+}
+
+.salary .table-scroll {
+  overflow-x: auto;
+}
+
+.salary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.salary-table th,
+.salary-table td {
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.salary-table thead th {
+  border-top: 0;
+  color: var(--ink-muted);
+  font-size: var(--type-caption-size);
+  font-weight: 600;
+}
+
+.salary-table tbody th {
+  font-weight: 500;
+}
+
+.salary-table .num {
+  text-align: right;
+}
+
+.salary-table__gross th,
+.salary-table__gross td,
+.salary-table tfoot th,
+.salary-table tfoot td {
+  font-weight: 650;
+}
+
+.salary-table tfoot th,
+.salary-table tfoot td {
+  border-top: 2px solid var(--line-strong);
+}
+
+.salary-form__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.salary-form__group legend {
+  margin-bottom: var(--space-3);
+  padding: 0;
+  font-weight: 650;
+}
+
+.salary-form__group .mft-segmented {
+  align-self: flex-start;
+}
+
+.salary-form__estimate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.salary-form__hint {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+}
+
+.salary-form__notice {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--marigold-soft);
+  color: var(--marigold-ink);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+}
+
+.salary-form__other {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.salary-form__remove {
+  margin-top: 26px;
+}
+
+.salary-form__total {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--income-soft);
+}
+
+.salary-form__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* ---------- Dashboard layout: KPI strip, then two rows of main + side ---------- */
+
+.kpis {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+@media (min-width: 640px) {
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+}
+
+.kpis--error {
+  display: block;
+}
+
+.period-tile__note {
+  margin: 0;
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+  color: var(--ink-muted);
+}
+
+/* Pushes the year line to the bottom, so the four tiles' year lines align. */
+.period-tile__spacer {
+  flex: 1;
+}
+
+.period-tile__meter {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.period-tile__meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--income);
+}
+
+/* Saved: the one bold surface on the screen. */
+.mft-stat.period-tile--accent {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.period-tile--accent .mft-stat__label,
+.period-tile--accent .period-tile__note,
+.period-tile--accent .period-tile__year {
+  color: var(--on-accent-muted);
+}
+
+.period-tile--accent .mft-amount,
+.period-tile--accent .period-tile__year .mft-amount {
+  color: var(--on-accent);
+}
+
+.period-tile--accent .period-tile__year {
+  border-top-color: color-mix(in srgb, var(--on-accent) 22%, transparent);
+}
+
+.dash-layout {
+  display: grid;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (min-width: 1200px) {
+  .dash-layout {
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+    gap: var(--space-5);
+  }
+}
+
+/* Side cards: the title keeps its line; the toggle drops below it when there isn't room. */
+.dash-layout .mft-card__header {
+  flex-wrap: wrap;
+}
+
+.dash-layout .mft-card__titles {
+  flex: 1 1 auto;
+  min-width: max-content;
+}
+
+/*
+ * Where the money went, Upcoming due dates: a fixed height, so a long list doesn't stretch the page.
+ * The header stays put; only the list scrolls (and it's focusable, so the keyboard can scroll it too).
+ */
+.mft-card.dash-fixed {
+  display: flex;
+  flex-direction: column;
+  max-height: 420px;
+}
+
+/* Side by side (wide screens) the card keeps its full height so the row lines up; stacked, it fits its content. */
+@media (min-width: 1200px) {
+  .mft-card.dash-fixed {
+    height: 420px;
+  }
+}
+
+.dash-fixed .mft-card__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding-right: var(--space-3);
+}
+
+.dash-fixed__scroll {
+  flex: 1;
+  min-height: 0;
+  padding-right: var(--space-2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.dash-fixed__scroll:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/*
+ * Where the money went, beside Recent transactions: as tall as its neighbour instead of a fixed height.
+ * `contain: size` stops its own list from growing the row, so a long list scrolls rather than stretching it.
+ */
+@media (min-width: 1200px) {
+  .mft-card.dash-fixed--match {
+    align-self: stretch;
+    height: auto;
+    max-height: none;
+    contain: size;
+  }
+}
+
+/* Income vs expenses: Chart / Table and the grouping, side by side (they wrap on narrow screens). */
+.chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/*
+ * The table view: the same height as the chart (legend + plot), so switching doesn't move the page.
+ * Header and totals stay in view while the rows scroll.
+ */
+.chart__table--scroll {
+  height: 274px;
+  margin-top: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.chart__table--scroll:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.chart__table--scroll table {
+  margin-top: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.chart__table--scroll th,
+.chart__table--scroll td {
+  padding: var(--space-2) var(--space-4);
+  white-space: nowrap;
+}
+
+.chart__table--scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+.chart__table--scroll tfoot th,
+.chart__table--scroll tfoot td {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface-raised);
+  border-top: 2px solid var(--line-strong);
+  border-bottom: 0;
+  font-weight: 650;
+}
+
+.chart__table--scroll tbody tr:hover {
+  background: var(--surface-sunken);
+}
+
+.chart__neg {
+  color: var(--expense);
+}
+
+/* The chart card lines up with "Upcoming due dates" beside it. */
+@media (min-width: 1200px) {
+  .dash-layout > .mft-card:first-child {
+    align-self: stretch;
+  }
+}
+
+/* My Salary: what actually came in under the Salary category. */
+.salary__received {
+  margin-top: var(--space-5);
+}
+
+.salary-received {
+  display: grid;
+  gap: var(--space-4);
+}
+
+@media (min-width: 640px) {
+  .salary-received {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.salary-received > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.salary-received__label {
+  color: var(--ink-muted);
+  font-size: var(--type-label-size);
+  font-weight: 550;
+}
+
+.salary-received__hint {
+  color: var(--ink-muted);
+  font-size: var(--type-caption-size);
+}
+
+.salary-received__link {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.card-editor__kind {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.card-editor__kind .mft-segmented {
+  align-self: flex-start;
+}
+
+/* ---------- Sidebar sections: a parent page (Income, Expenses) with its pages nested under it ---------- */
+
+.sidebar__section--parent {
+  margin-top: var(--space-3);
+}
+
+.sidebar__link--parent {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+/* One of its pages is showing: the parent's icon picks up the accent, so the trail reads at a glance. */
+.sidebar__link--open svg {
+  color: var(--accent);
+}
+
+.sidebar__list--sub {
+  position: relative;
+  margin: 2px 0 0 var(--space-5);
+  padding-left: var(--space-2);
+  border-left: 1px solid var(--line);
+}
+
+.sidebar__list--sub .sidebar__link {
+  min-height: 38px;
+  font-size: 14px;
+}
+
+.sidebar__list--sub .sidebar__link svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ---------- Section links (on the Income and Expenses overviews) ---------- */
+
+.section-links {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.section-links__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+}
+
+.section-links li:last-child .section-links__row {
+  border-bottom: 0;
+}
+
+.section-links__row:hover .section-links__label {
+  text-decoration: underline;
+}
+
+.section-links__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.section-links__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.section-links__label {
+  font-weight: 650;
+}
+
+.section-links__detail {
+  color: var(--ink-muted);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+}
+
+.section-links__figure {
+  flex: none;
+  font-weight: 600;
+}
+
+.section-links__chevron {
+  display: flex;
+  flex: none;
+  color: var(--ink-muted);
+}
+
+/* On the blue tile, red/green trend text can't be read: it takes the tile's own text color (the arrow still shows direction). */
+.period-tile--accent .mft-stat__trend {
+  color: var(--on-accent);
+}
+
+/* ---------- Loading without flicker ----------
+ * 1. Placeholders are invisible for the first 0.2s (most loads finish sooner), then fade in.
+ * 2. They take the size of what they stand in for, so nothing below moves when the data arrives.
+ * 3. Real content fades in rather than popping.
+ */
+.skeleton {
+  animation: skeleton-appear 160ms ease-out 200ms both;
+}
+
+.skeleton__inline {
+  animation:
+    skeleton-appear 160ms ease-out 200ms both,
+    skeleton-pulse 1.4s ease-in-out 360ms infinite;
+}
+
+/* A chart's placeholder is as tall as the chart with its legend. */
+.skeleton--chart {
+  height: 276px;
+  padding-top: 36px;
+}
+
+/* A figure tile is the same height loading or loaded: the figure line and the trend line are reserved. */
+.period-tile__value {
+  min-height: var(--type-amount-line);
+  align-items: center;
+}
+
+.period-tile__value .skeleton__inline {
+  width: 60%;
+  height: 26px;
+}
+
+@media (min-width: 640px) {
+  .kpis .period-tile {
+    min-height: 158px;
+  }
+}
+
+.loaded-in {
+  animation: content-in 180ms ease-out both;
+}
+
+@keyframes content-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton,
+  .loaded-in {
+    animation: none;
+  }
+  .skeleton__inline {
+    animation: skeleton-appear 1ms 200ms both;
+  }
+}
+
+/* ---------- Sidebar accordion (Income, Expenses) ---------- */
+
+.sidebar__parent-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sidebar__parent-row .sidebar__link {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar__toggle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.sidebar__toggle:hover {
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+
+.sidebar__toggle:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.sidebar__toggle svg {
+  transition: transform 200ms ease;
+}
+
+.sidebar__toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+/* Height animates by grid rows (0fr ↔ 1fr), so it works for any number of links. */
+.sidebar__collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms ease;
+}
+
+.sidebar__collapse[data-open] {
+  grid-template-rows: 1fr;
+}
+
+.sidebar__collapse > .sidebar__list--sub {
+  min-height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  transition: visibility 0s 220ms;
+}
+
+.sidebar__collapse[data-open] > .sidebar__list--sub {
+  visibility: visible;
+  transition: visibility 0s 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar__collapse,
+  .sidebar__toggle svg {
+    transition: none;
+  }
+}
+
+/* The reminder arrives after the page: it slides open instead of shoving everything down at once. */
+.alert-banner {
+  animation: banner-in 240ms ease-out both;
+}
+
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    margin-top: -64px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alert-banner {
+    animation: none;
+  }
+}
+
+/* ---------- Online Credit: loans ---------- */
+
+.loans-kpis {
+  margin-bottom: var(--space-5);
+}
+
+.loans {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.loan {
+  display: grid;
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+}
+
+.loans li:first-child .loan {
+  border-top: 0;
+}
+
+.loan:hover {
+  background: var(--surface-sunken);
+}
+
+.loan:hover .loan__name {
+  text-decoration: underline;
+}
+
+@media (min-width: 900px) {
+  .loan {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.5fr);
+    align-items: center;
+  }
+  .loan__progress {
+    grid-column: 1 / -1;
+  }
+}
+
+.loan__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.loan__lender {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-muted);
+  font-size: var(--type-caption-size);
+  font-weight: 600;
+}
+
+.loan__name {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.loan__meta,
+.loan__label {
+  color: var(--ink-muted);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+}
+
+.loan__figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.loan__figures > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.loan__due {
+  font-weight: 600;
+}
+
+.loans__accounts-title {
+  margin-top: var(--space-6);
+  margin-bottom: var(--space-3);
+}
+
+.loan-accounts {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 640px) {
+  .loan-accounts {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
+
+.loan-account {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+  color: inherit;
+  text-decoration: none;
+}
+
+.loan-account:hover .loan-account__name {
+  text-decoration: underline;
+}
+
+.loan-account__name {
+  font-weight: 650;
+}
+
+.loan-account__owed {
+  flex-basis: 100%;
+  color: var(--ink-muted);
+  font-size: var(--type-caption-size);
+}
+
+/* Add loan form */
+.loan-form__new {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+.loan-form__new legend {
+  padding: 0 var(--space-1);
+  font-weight: 650;
+}
+
+.loan-form__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip {
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  background: var(--surface-sunken);
+}
+
+.chip--on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.loan-form__summary {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+}
+
+/* Card page: "Add installment" and "Add loan" side by side. */
+.pgroups__add {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.loan__name .mft-badge {
+  margin-left: var(--space-1);
+  vertical-align: middle;
+  font-weight: 500;
+}
+
+/* ---------- Credit summary: limit − used = available ---------- */
+.credit-sum {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg, var(--radius-md));
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.credit-sum__figures {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+.credit-sum__figures > div {
+  display: grid;
+  gap: 2px;
+}
+
+.credit-sum__label {
+  color: var(--ink-muted);
+  font-size: var(--type-label-size);
+  font-weight: 600;
+}
+
+.credit-sum__note {
+  color: var(--ink-muted);
+  font-size: var(--type-label-size);
+}
+
+.credit-sum__op {
+  display: none;
+  align-self: center;
+  color: var(--ink-muted);
+  font-size: 22px;
+  font-weight: 300;
+}
+
+.credit-sum__result .mft-amount {
+  color: var(--accent);
+}
+
+.credit-sum__parts {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-3) 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+  font-size: var(--type-label-size);
+}
+
+.credit-sum__parts li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+}
+
+.credit-sum__parts li > span:first-child {
+  font-weight: 600;
+}
+
+.credit-sum__parts li > span:last-child {
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 720px) {
+  .credit-sum__figures {
+    grid-template-columns: 1fr auto 1fr auto 1fr;
+    align-items: start;
+  }
+  .credit-sum__op {
+    display: block;
+  }
+}
+
+/* ---------- Section dashboard (Online Credit, Credit Cards, Cash & Others, Other Income) ---------- */
+.section-dash__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.section-dash__bar > .mft-field {
+  flex: 1 1 220px;
+  max-width: 320px;
+}
+
+.section-dash__bar .dash-period {
+  margin-left: auto;
+}
+
+.section-dash__layout {
+  margin-bottom: var(--space-5);
+}
+
+.section-dash__list {
+  margin-bottom: var(--space-5);
+}
+
+.section-dash__sources {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.section-dash__source {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-2);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.section-dash__sources li:last-child .section-dash__source {
+  border-bottom: 0;
+}
+
+.section-dash__source:hover {
+  background: var(--surface-sunken, rgba(127, 127, 127, 0.08));
+}
+
+.section-dash__source:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.section-dash__source--on {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.section-dash__name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font-weight: 600;
+}
+
+.section-dash__amount {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.section-dash__meter {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.section-dash__meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.section-dash__year {
+  grid-column: 1 / -1;
+  color: var(--ink-muted);
+  font-size: var(--type-label-size);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 639px) {
+  .section-dash__bar .dash-period {
+    margin-left: 0;
+  }
+  .section-dash__bar > .mft-field {
+    max-width: none;
+  }
+}
+
+/* Online Credit account tile with its Delete button. */
+.loan-account__item {
+  position: relative;
+}
+
+.loan-account__item .loan-account {
+  height: 100%;
+  padding-right: 88px;
+}
+
+li.loan-account__item > button.loan-account__delete {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+}
+
+/* "‹ Expenses" above a page title: back to the list or parent section. */
+.page__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 var(--space-2) -4px;
+  padding: 2px 6px 2px 2px;
+  border-radius: var(--radius-sm, 6px);
+  color: var(--ink-muted);
+  font-size: var(--type-label-size);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.page__back:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.page__back:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Online Credit: Payments due (scrollable, by account and date) ---------- */
+.loan-dues {
+  margin-bottom: var(--space-5);
+}
+
+.loan-dues__head {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-5);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-muted);
+  font-size: var(--type-label-size);
+  font-weight: 600;
+}
+
+.loan-dues__scroll {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: var(--space-1) var(--space-3) var(--space-3);
+  overscroll-behavior: contain;
+}
+
+.loan-dues__scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.loan-dues__amount {
+  text-align: right;
+}
+
+/* ---------- Expenses summary: one card per section ---------- */
+.exp-sections {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+@media (min-width: 900px) {
+  .exp-sections {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.exp-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg, var(--radius-md));
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+  color: inherit;
+  text-decoration: none;
+}
+
+.exp-section:hover .exp-section__open {
+  text-decoration: underline;
+}
+
+.exp-section:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.exp-section__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.exp-section__icon {
+  display: inline-flex;
+}
+
+.exp-section__name {
+  font-weight: 650;
+  font-size: 16px;
+}
+
+.exp-section__open {
+  margin-left: auto;
+  color: var(--accent);
+  font-size: var(--type-label-size);
+  font-weight: 600;
+}
+
+.exp-section__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px var(--space-3);
+}
+
+.exp-section__label {
+  color: var(--ink-muted);
+  font-size: var(--type-label-size);
+  font-weight: 600;
+}
+
+.exp-section__row--sub {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line);
+  font-size: var(--type-label-size);
+}
+
+.exp-section__row--sub > span:first-child {
+  color: var(--ink-muted);
+}
+
+.exp-section__row--sub > span:last-child {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.exp-section__due {
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--type-label-size);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+
+.exp-section__due--late {
+  background: color-mix(in srgb, #d93025 14%, transparent);
+  color: #d93025;
+}
+
+.dash-layout > .exp-wide {
+  grid-column: 1 / -1;
+}
+
+/* ---------- Section pages: the month's transactions (the ledger rows, in a bounded scroll area) ---------- */
+.section-tx__scroll {
+  padding: 0;
+}
+
+/* Limit − used = available: each sign centered in the space between its two figures. */
+@media (min-width: 720px) {
+  .credit-sum__figures {
+    display: flex;
+    align-items: center;
+  }
+  .credit-sum__figures > div {
+    flex: 0 1 auto;
+  }
+  .credit-sum__op {
+    flex: 1 1 0;
+    text-align: center;
+  }
 }

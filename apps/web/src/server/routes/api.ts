@@ -11,17 +11,21 @@ import {
   monthQuerySchema,
   newCategorySchema,
   newTransactionSchema,
+  rangeQuerySchema,
+  salaryInputSchema,
   transactionQuerySchema,
   updateCategorySchema,
   updateTransactionSchema,
   type TransactionType,
 } from "../../shared/contracts";
+import { monthlyGross } from "../../shared/salary";
 import { HttpError, json, readBody, readQuery, route } from "../http";
 import type { ChildrenPlan, Repositories } from "../repositories/types";
 import { createCardRoutes, ensureInstallmentsSynced } from "./cards";
 import { createImportExportRoutes } from "./importExport";
 import { checkSplit, createPeopleRoutes } from "./people";
 
+const formatPeso = (minor: number) => `₱${(minor / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const plural = (n: number) => `${n} transaction${n === 1 ? "" : "s"}`;
 
 export function createApiRoutes(repos: Repositories) {
@@ -255,11 +259,35 @@ export function createApiRoutes(repos: Repositories) {
       }),
     },
 
+    "/api/summary/range": {
+      GET: route(async (req) => {
+        const { from, to } = readQuery(req, rangeQuerySchema);
+        await ensureInstallmentsSynced(repos);
+        return json(await repos.summary.range(from, to));
+      }),
+    },
+
+    "/api/salary": {
+      GET: route(async () => json({ profile: (await repos.salary.get()) ?? null })),
+
+      PUT: route(async (req) => {
+        const input = await readBody(req, salaryInputSchema);
+        const gross = monthlyGross(input.basis, input.grossMinor);
+        const deducted = input.deductions.reduce((sum, d) => sum + d.amountMinor, 0);
+        if (deducted > gross) {
+          throw new HttpError(400, "Some fields need fixing.", {
+            deductions: `Deductions (${formatPeso(deducted)} a month) are more than the gross pay (${formatPeso(gross)} a month).`,
+          });
+        }
+        return json({ profile: await repos.salary.save(input) });
+      }),
+    },
+
     "/api/summary/monthly": {
       GET: route(async (req) => {
-        const { to, months, cardId } = readQuery(req, monthlyQuerySchema);
+        const { to, months, ...filters } = readQuery(req, monthlyQuerySchema);
         await ensureInstallmentsSynced(repos);
-        return json(await repos.summary.monthly(to, months, cardId));
+        return json(await repos.summary.monthly(to, months, filters));
       }),
     },
   };

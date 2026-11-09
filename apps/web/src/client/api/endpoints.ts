@@ -10,6 +10,10 @@ import {
   installmentDetailSchema,
   monthSummarySchema,
   monthTotalsSchema,
+  rangeSummarySchema,
+  salaryResponseSchema,
+  type SalaryInput,
+  type MonthlyFilters,
   personDetailSchema,
   personPaymentSchema,
   personSummarySchema,
@@ -97,11 +101,21 @@ export const api = {
   getSummary: (month: Month, cardId?: number) =>
     request(`/api/summary?month=${encodeURIComponent(month)}${cardId ? `&cardId=${cardId}` : ""}`, monthSummarySchema),
 
-  getMonthly: (to: Month, months = 6, cardId?: number) =>
-    request(
-      `/api/summary/monthly?to=${encodeURIComponent(to)}&months=${months}${cardId ? `&cardId=${cardId}` : ""}`,
-      z.array(monthTotalsSchema),
-    ),
+  /** A number is a card id (the card page); an object narrows by card, category tree or how it was paid. */
+  getMonthly: (to: Month, months = 6, filters?: number | MonthlyFilters) => {
+    const f: MonthlyFilters = typeof filters === "number" ? { cardId: filters } : (filters ?? {});
+    const params = new URLSearchParams({ to, months: String(months) });
+    for (const [key, value] of Object.entries(f)) if (value !== undefined) params.set(key, String(value));
+    return request(`/api/summary/monthly?${params}`, z.array(monthTotalsSchema));
+  },
+
+  /** Whole months `from`…`to`, both included: a quarter, a year. */
+  getRangeSummary: (from: Month, to: Month) =>
+    request(`/api/summary/range?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, rangeSummarySchema),
+
+  // My salary
+  getSalary: () => request("/api/salary", salaryResponseSchema),
+  saveSalary: (input: SalaryInput) => request("/api/salary", salaryResponseSchema, { method: "PUT", body: JSON.stringify(input) }),
 
   // Credit cards
   listCards: () => request("/api/cards", z.array(cardSummarySchema)),
@@ -109,7 +123,9 @@ export const api = {
   createCard: (input: NewCard) => request("/api/cards", cardSummarySchema, { method: "POST", body: JSON.stringify(input) }),
   updateCard: (id: number, input: UpdateCard) =>
     request(`/api/cards/${id}`, cardSummarySchema, { method: "PATCH", body: JSON.stringify(input) }),
-  deleteCard: (id: number) => request(`/api/cards/${id}`, null, { method: "DELETE" }),
+  /** `withHistory` also deletes its charges, loans and payments; without it, a card with charges is refused. */
+  deleteCard: (id: number, { withHistory = false } = {}) =>
+    request(`/api/cards/${id}${withHistory ? "?history=delete" : ""}`, null, { method: "DELETE" }),
   listPayments: (cardId: number) => request(`/api/cards/${cardId}/payments`, z.array(cardPaymentSchema)),
   addPayment: (cardId: number, input: NewCardPayment) =>
     request(`/api/cards/${cardId}/payments`, cardPaymentSchema, { method: "POST", body: JSON.stringify(input) }),

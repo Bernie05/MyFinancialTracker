@@ -1,29 +1,37 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CardDetailPage } from "./features/cards/CardDetailPage";
-import { CardsPage } from "./features/cards/CardsPage";
+import { CreditSectionPage } from "./features/cards/CreditSectionPage";
 import { CategoriesPage } from "./features/categories/CategoriesPage";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
 import { PeoplePage } from "./features/people/PeoplePage";
 import { PersonPage } from "./features/people/PersonPage";
+import { ExpensesOverviewPage } from "./features/overview/ExpensesOverviewPage";
+import { IncomeOverviewPage } from "./features/overview/IncomeOverviewPage";
 import { ExpensesReportPage } from "./features/reports/ExpensesReportPage";
+import { SalaryPage } from "./features/salary/SalaryPage";
 import { TransactionsPage } from "./features/transactions/TransactionsPage";
+import { CashSectionPage } from "./features/overview/CashSectionPage";
 import { AlertBell } from "./layout/AlertBell";
 import {
   BudgetIcon,
   CardIcon,
+  CashIcon,
   DashboardIcon,
   ExpensesIcon,
   IncomeIcon,
   MenuIcon,
+  OnlineCreditIcon,
+  OtherIncomeIcon,
   PeopleIcon,
   PlusIcon,
   ReportIcon,
+  SalaryIcon,
   SettingsIcon,
   TagIcon,
 } from "./layout/icons";
 import { PlaceholderPage } from "./layout/PlaceholderPage";
 import { startAddTransaction } from "./layout/quickAdd";
-import { Sidebar, type NavItem } from "./layout/Sidebar";
+import { Sidebar, type NavGroup, type NavItem } from "./layout/Sidebar";
 import { refreshAlerts } from "./lib/alerts";
 import { navigate, usePath } from "./lib/router";
 import { goToLogin, loadSession, nextPath, signOut, useSession } from "./lib/session";
@@ -31,16 +39,35 @@ import type { User } from "../shared/contracts";
 import { AuthPage } from "./features/auth/AuthPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 
-const mainNav: NavItem[] = [
-  { path: "/", label: "Dashboard", icon: <DashboardIcon /> },
-  { path: "/expenses", label: "Expenses", icon: <ExpensesIcon /> },
-  { path: "/income", label: "Income", icon: <IncomeIcon /> },
-  { path: "/cards", label: "Credit Cards", icon: <CardIcon /> },
-  { path: "/people", label: "People", icon: <PeopleIcon /> },
-];
-const reportNav: NavItem[] = [
-  { path: "/reports/budget", label: "Budget Report", icon: <BudgetIcon /> },
-  { path: "/reports/expenses", label: "Expenses Report", icon: <ReportIcon /> },
+const navGroups: NavGroup[] = [
+  {
+    items: [
+      { path: "/", label: "Dashboard", icon: <DashboardIcon /> },
+      { path: "/people", label: "People", icon: <PeopleIcon /> },
+    ],
+  },
+  {
+    parent: { path: "/income", label: "Income", icon: <IncomeIcon /> },
+    items: [
+      { path: "/income/salary", label: "My Salary", icon: <SalaryIcon /> },
+      { path: "/income/other", label: "Other Income", icon: <OtherIncomeIcon /> },
+    ],
+  },
+  {
+    parent: { path: "/expenses", label: "Expenses", icon: <ExpensesIcon /> },
+    items: [
+      { path: "/online-credit", label: "Online Credit", icon: <OnlineCreditIcon /> },
+      { path: "/cards", label: "Credit Cards", icon: <CardIcon /> },
+      { path: "/expenses/cash", label: "Cash & Others", icon: <CashIcon /> },
+    ],
+  },
+  {
+    label: "Report",
+    items: [
+      { path: "/reports/budget", label: "Budget Report", icon: <BudgetIcon /> },
+      { path: "/reports/expenses", label: "Expenses Report", icon: <ReportIcon /> },
+    ],
+  },
 ];
 const bottomNav: NavItem[] = [
   { path: "/categories", label: "Categories", icon: <TagIcon /> },
@@ -49,8 +76,13 @@ const bottomNav: NavItem[] = [
 
 const pages: Record<string, ReactNode> = {
   "/": <DashboardPage />,
-  "/expenses": <TransactionsPage key="expense" type="expense" />,
-  "/income": <TransactionsPage key="income" type="income" />,
+  "/income": <IncomeOverviewPage />,
+  "/income/salary": <SalaryPage />,
+  "/income/other": <TransactionsPage key="income" type="income" title="Other Income" scope="no-salary" />,
+  "/expenses": <ExpensesOverviewPage />,
+  "/expenses/cash": <CashSectionPage />,
+  "/expenses/all": <TransactionsPage key="expense" type="expense" title="All expenses" />,
+  "/online-credit": <CreditSectionPage key="online" kind="online" />,
   "/reports/budget": (
     <PlaceholderPage
       title="Budget Report"
@@ -61,13 +93,13 @@ const pages: Record<string, ReactNode> = {
     />
   ),
   "/reports/expenses": <ExpensesReportPage />,
-  "/cards": <CardsPage />,
+  "/cards": <CreditSectionPage key="bank" kind="bank" />,
   "/people": <PeoplePage />,
   "/categories": <CategoriesPage />,
   "/settings": <SettingsPage />,
 };
 
-const allNav = [...mainNav, ...reportNav, ...bottomNav];
+const allNav = [...navGroups.flatMap((g) => (g.parent ? [g.parent, ...g.items] : g.items)), ...bottomNav];
 
 /**
  * The gate: sign-in pages for visitors, a splash while the session is checked, and the app for a signed-in
@@ -103,9 +135,12 @@ function Shell({ user }: { user: User }) {
   const lastPath = useRef(path);
 
   // A section owns its sub-pages: /cards/3 is still "Credit Cards".
-  const section = allNav.find((item) => item.path === path || (item.path !== "/" && path.startsWith(`${item.path}/`)));
+  // The longest match wins: /income/salary is My Salary, not Income.
+  const section = allNav
+    .filter((item) => item.path === path || (item.path !== "/" && path.startsWith(`${item.path}/`)))
+    .sort((a, b) => b.path.length - a.path.length)[0];
   const title = section?.label ?? "Page not found";
-  const cardId = path.match(/^\/cards\/(\d+)$/)?.[1];
+  const cardId = path.match(/^\/(?:cards|online-credit)\/(\d+)$/)?.[1];
   const personId = path.match(/^\/people\/(\d+)$/)?.[1];
 
   // Card reminders: checked once on load; pages refresh them after payments and card expenses.
@@ -162,8 +197,7 @@ function Shell({ user }: { user: User }) {
 
       <Sidebar
         id="sidebar"
-        main={mainNav}
-        reports={reportNav}
+        groups={navGroups}
         bottom={bottomNav}
         currentPath={section?.path ?? path}
         open={menuOpen}

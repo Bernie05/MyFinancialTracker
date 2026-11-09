@@ -8,12 +8,23 @@
  */
 import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
-import type { Category, Month, Transaction } from "../../shared/contracts";
+import type { Category, Month, PaidWith, Transaction } from "../../shared/contracts";
 import { installmentSchedule } from "../../shared/installments";
 import { currentUserId as uid } from "../context";
 import type { Db } from "../db/client";
 import { allocate, type Split } from "../../shared/split";
-import { cardPayments, categories, creditCards, installments, people, personPayments, transactions, transactionShares } from "../db/schema";
+import {
+  cardPayments,
+  categories,
+  creditCards,
+  installments,
+  people,
+  personPayments,
+  salaryDeductions,
+  salaryProfiles,
+  transactions,
+  transactionShares,
+} from "../db/schema";
 import type {
   CardRepository,
   CategoryRef,
@@ -23,6 +34,7 @@ import type {
   PeopleRepository,
   PlanSplit,
   Repositories,
+  SalaryRepository,
   SummaryRepository,
   TransactionRepository,
 } from "./types";
@@ -66,6 +78,23 @@ function writeShares(run: Runner, userId: number, transactionId: number, amountM
     else run.insert(transactionShares).values({ userId, transactionId, personId: part.personId, amountMinor: part.amountMinor }).run();
   }
   run.update(transactions).set({ myShareMinor: my }).where(eq(transactions.id, transactionId)).run();
+}
+
+/**
+ * Filters shared by the ledger and the monthly totals. A category includes its subcategories (and
+ * excluding one excludes them too). `paidWith`: "cash" = no card; "bank"/"online" = a card of that kind.
+ */
+function scopeFilters(userId: number, f: { categoryId?: number; excludeCategoryId?: number; paidWith?: PaidWith }) {
+  const tree = (id: number) => sql`(${transactions.categoryId} = ${id} or ${transactions.categoryId} in (select id from categories where parent_id = ${id} and user_id = ${userId}))`;
+  return [
+    f.categoryId ? tree(f.categoryId) : undefined,
+    f.excludeCategoryId ? sql`not ${tree(f.excludeCategoryId)}` : undefined,
+    f.paidWith === "cash"
+      ? isNull(transactions.cardId)
+      : f.paidWith
+        ? sql`${transactions.cardId} in (select id from credit_cards where kind = ${f.paidWith} and user_id = ${userId})`
+        : undefined,
+  ];
 }
 
 const mine = {
@@ -184,7 +213,7 @@ function createTransactionRepository(db: Db): TransactionRepository {
   const one = async (id: number) => (await withShares(await selectWithCategory().where(byId(id))))[0] as Transaction | undefined;
 
   return {
-    async list({ type, from, to, categoryId, cardId, installment, q, page, pageSize }) {
+    async list({ type, from, to, categoryId, cardId, paidWith, excludeCategoryId, installment, q, page, pageSize }) {
       const userId = uid();
       // Escape LIKE wildcards so a search for "50%" matches the text, not everything.
       const pattern = q && `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
@@ -193,11 +222,8 @@ function createTransactionRepository(db: Db): TransactionRepository {
         type ? eq(transactions.type, type) : undefined,
         from ? gte(transactions.occurredOn, from) : undefined,
         to ? lte(transactions.occurredOn, to) : undefined,
-        // A parent includes its subcategories.
-        categoryId
-          ? sql`(${transactions.categoryId} = ${categoryId} or ${transactions.categoryId} in (select id from categories where parent_id = ${categoryId} and user_id = ${userId}))`
-          : undefined,
         cardId ? eq(transactions.cardId, cardId) : undefined,
+        ...scopeFilters(userId, { categoryId, excludeCategoryId, paidWith }),
         installment === "none" ? isNull(transactions.installmentId) : installment === "only" ? sql`${transactions.installmentId} is not null` : undefined,
         pattern
           ? sql`(${transactions.description} like ${pattern} escape '\\' or ${transactions.note} like ${pattern} escape '\\')`
@@ -287,10 +313,9 @@ function createTransactionRepository(db: Db): TransactionRepository {
 }
 
 function createSummaryRepository(db: Db): SummaryRepository {
-  return {
-    async forMonth(month, cardId) {
-      const [from, to] = monthRange(month);
-      const inMonth = and(
+  /** Totals and the category split over [from, to), two dates. */
+  async function between(from: string, to: string, cardId?: number) {
+    const inMonth = and(
         mine.transactions(),
         gte(transactions.occurredOn, from),
         lt(transactions.occurredOn, to),
@@ -345,15 +370,24 @@ function createSummaryRepository(db: Db): SummaryRepository {
       const incomeMinor = totals?.incomeMinor ?? 0;
       const expenseMinor = totals?.expenseMinor ?? 0;
       return {
-        month,
         incomeMinor,
         expenseMinor,
         netMinor: incomeMinor - expenseMinor,
         expenseByCategory: byCategory,
       };
+  }
+
+  return {
+    async forMonth(month, cardId) {
+      const [from, to] = monthRange(month);
+      return { month, ...(await between(from, to, cardId)) };
     },
 
-    async monthly(to, months, cardId) {
+    async range(from, to) {
+      return { from, to, ...(await between(`${from}-01`, monthRange(to)[1])) };
+    },
+
+    async monthly(to, months, { cardId, categoryId, excludeCategoryId, paidWith } = {}) {
       const first = shiftMonth(to, 1 - months);
       const month = sql<string>`substr(${transactions.occurredOn}, 1, 7)`;
       const spent = cardId ? transactions.amountMinor : transactions.myShareMinor;
@@ -370,6 +404,7 @@ function createSummaryRepository(db: Db): SummaryRepository {
             gte(transactions.occurredOn, `${first}-01`),
             lt(transactions.occurredOn, `${shiftMonth(to, 1)}-01`),
             cardId ? eq(transactions.cardId, cardId) : undefined,
+            ...scopeFilters(uid(), { categoryId, excludeCategoryId, paidWith }),
           ),
         )
         .groupBy(month);
@@ -413,6 +448,14 @@ function createCardRepository(db: Db): CardRepository {
     },
     async remove(id) {
       await db.delete(creditCards).where(byId(id));
+    },
+    async removeWithHistory(id) {
+      const userId = uid();
+      // One DB transaction: its charges first (their shares go by cascade), then the card (plans and payments cascade).
+      db.transaction((tx) => {
+        tx.delete(transactions).where(and(eq(transactions.cardId, id), eq(transactions.userId, userId))).run();
+        tx.delete(creditCards).where(byId(id)).run();
+      });
     },
     // Two aggregate queries per card (charges, payments), with conditional sums for every window at once.
     async totals(id, { statementDate, cycleFrom, today }) {
@@ -483,6 +526,7 @@ function createInstallmentRepository(db: Db): InstallmentRepository {
         firstBillingMonth: installments.firstBillingMonth,
         preterminatedOn: installments.preterminatedOn,
         split: installments.split,
+        loanType: installments.loanType,
         closingDay: creditCards.closingDay,
       })
       .from(installments)
@@ -707,6 +751,7 @@ function createPeopleRepository(db: Db): PeopleRepository {
           amountMinor: transactionShares.amountMinor,
           card: { id: creditCards.id, name: creditCards.name },
           installmentId: transactions.installmentId,
+          installmentSeq: transactions.installmentSeq,
         })
         .from(transactionShares)
         .innerJoin(transactions, eq(transactionShares.transactionId, transactions.id))
@@ -717,7 +762,7 @@ function createPeopleRepository(db: Db): PeopleRepository {
     },
     async payments(personId) {
       return db
-        .select({ id: personPayments.id, personId: personPayments.personId, amountMinor: personPayments.amountMinor, paidOn: personPayments.paidOn, note: personPayments.note })
+        .select({ id: personPayments.id, personId: personPayments.personId, amountMinor: personPayments.amountMinor, paidOn: personPayments.paidOn, note: personPayments.note, itemKey: personPayments.itemKey })
         .from(personPayments)
         .where(and(eq(personPayments.personId, personId), eq(personPayments.userId, uid())))
         .orderBy(desc(personPayments.paidOn), desc(personPayments.id));
@@ -726,7 +771,7 @@ function createPeopleRepository(db: Db): PeopleRepository {
       const [row] = await db
         .insert(personPayments)
         .values({ userId: uid(), personId, ...data })
-        .returning({ id: personPayments.id, personId: personPayments.personId, amountMinor: personPayments.amountMinor, paidOn: personPayments.paidOn, note: personPayments.note });
+        .returning({ id: personPayments.id, personId: personPayments.personId, amountMinor: personPayments.amountMinor, paidOn: personPayments.paidOn, note: personPayments.note, itemKey: personPayments.itemKey });
       return row!;
     },
     async removePayment(personId, paymentId) {
@@ -739,8 +784,38 @@ function createPeopleRepository(db: Db): PeopleRepository {
   };
 }
 
+function createSalaryRepository(db: Db): SalaryRepository {
+  async function get() {
+    const [profile] = await db.select().from(salaryProfiles).where(eq(salaryProfiles.userId, uid()));
+    if (!profile) return undefined;
+    const deductions = await db
+      .select({ kind: salaryDeductions.kind, name: salaryDeductions.name, amountMinor: salaryDeductions.amountMinor })
+      .from(salaryDeductions)
+      .where(eq(salaryDeductions.userId, uid()))
+      .orderBy(asc(salaryDeductions.position));
+    return { basis: profile.basis, grossMinor: profile.grossMinor, deductions };
+  }
+
+  return {
+    get,
+    async save({ basis, grossMinor, deductions }) {
+      const userId = uid();
+      db.transaction((tx) => {
+        tx.insert(salaryProfiles)
+          .values({ userId, basis, grossMinor })
+          .onConflictDoUpdate({ target: salaryProfiles.userId, set: { basis, grossMinor } })
+          .run();
+        tx.delete(salaryDeductions).where(eq(salaryDeductions.userId, userId)).run();
+        deductions.forEach((d, position) => tx.insert(salaryDeductions).values({ ...d, userId, position }).run());
+      });
+      return (await get())!;
+    },
+  };
+}
+
 export function createDrizzleRepositories(db: Db): Repositories {
   return {
+    salary: createSalaryRepository(db),
     people: createPeopleRepository(db),
     imports: createImportRepository(db),
     categories: createCategoryRepository(db),

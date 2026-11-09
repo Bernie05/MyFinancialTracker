@@ -73,45 +73,60 @@ function RepaymentForm({ person, onSaved, onCancel }: { person: PersonDetail; on
   );
 }
 
-/** The note a "Paid" button writes on the repayment, so its Undo can find it. */
-const paidNote = (b: PersonBilling) => `Paid: billing due ${b.dueDate}`;
-const PAID_ALL_NOTE = "Paid all billed";
 
-function billingStatus(b: PersonBilling) {
-  switch (b.status) {
-    case "paid":
-      return <span className="bill-badge bill-badge--paid">Paid</span>;
-    case "unpaid":
-      return <span className="bill-badge bill-badge--unpaid">Unpaid</span>;
-    case "partial":
-      return <span className="bill-badge">Partly paid</span>;
-    default: {
-      const days = Math.round((Date.parse(`${b.dueDate}T00:00:00Z`) - Date.parse(`${todayLocal()}T00:00:00Z`)) / 86_400_000);
-      return <span className="bill-badge">{days === 0 ? "Due today" : `Due in ${days} day${days === 1 ? "" : "s"}`}</span>;
+type ItemGroup = {
+  key: string;
+  title: string;
+  plan: PersonDetail["plans"][number] | undefined;
+  months: PlanMonth[];
+  totalMinor: number;
+  paidMinor: number;
+  payments: PersonPayment[];
+};
+
+/** A person's charges by item: each installment plan, and each straight charge, oldest first. */
+function itemGroups(p: PersonDetail): ItemGroup[] {
+  const today = todayLocal();
+  const groups = new Map<string, ItemGroup>();
+  for (const b of p.billings) {
+    for (const i of b.items) {
+      const key = i.installmentId !== null ? `p${i.installmentId}` : i.key;
+      const plan = i.installmentId !== null ? p.plans.find((pl) => pl.installmentId === i.installmentId) : undefined;
+      const g = groups.get(key) ?? { key, title: plan?.description ?? i.description, plan, months: [], totalMinor: 0, paidMinor: 0, payments: [] };
+      g.months.push({ ...i, dueDate: b.dueDate, pastDue: b.dueDate < today, cardName: b.cardName });
+      g.totalMinor += i.amountMinor;
+      g.paidMinor += i.paidMinor;
+      groups.set(key, g);
     }
   }
+  for (const g of groups.values()) {
+    g.months.sort((a, b) => a.occurredOn.localeCompare(b.occurredOn) || a.key.localeCompare(b.key));
+    // Repayments for the item and for any of its months.
+    g.payments = p.payments.filter((pay) => pay.itemKey === g.key || pay.itemKey?.startsWith(`${g.key}-`));
+  }
+  return [...groups.values()].sort((a, b) => a.months[0]!.occurredOn.localeCompare(b.months[0]!.occurredOn));
 }
 
-/**
- * Charges grouped by billing (card statement or cash month), newest first, as an accordion. "Paid" records
- * a repayment for that billing plus anything unpaid before it; past-due billings show Unpaid and move to the next one.
- */
-function BillingsCard({ person: p, onChanged }: { person: PersonDetail; onChanged: (message: string) => void }) {
-  const [busy, setBusy] = useState<string | null>(null);
-  const [confirmAll, setConfirmAll] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // Everything still to pay, including installment months not billed yet.
-  const owing = p.billings.reduce((sum, b) => sum + b.remainingMinor, 0);
-  const today = todayLocal();
-  const coming = p.billings.filter((b) => b.dueDate >= today); // soonest first
-  const past = p.billings.filter((b) => b.dueDate < today).reverse(); // newest first
-  const nextKey = coming.find((b) => b.remainingMinor > 0)?.key;
+const monthName = (g: ItemGroup, m: PlanMonth) => (g.plan ? monthLabel(m.description, g.plan.description) : m.description);
+/** The note a month's "Paid" writes on the repayment. */
+const monthNote = (g: ItemGroup, m: PlanMonth) => `Paid: ${g.title} · ${monthName(g, m)}`;
 
-  async function pay(amountMinor: number, note: string, key: string, message: string) {
+/**
+ * Charges by item (an installment plan, or a straight charge) as an accordion. Each item header shows
+ * what's left with "Full paid", and each month inside has
+ * its own "Paid". A month's or item's repayment is for that item, so it lowers exactly what it says.
+ */
+function ItemsCard({ person: p, onChanged }: { person: PersonDetail; onChanged: (message: string) => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<ItemGroup | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const items = itemGroups(p);
+
+  async function run(key: string, action: () => Promise<unknown>, message: string) {
     setError(null);
     setBusy(key);
     try {
-      await api.addPersonPayment(p.id, { amountMinor, paidOn: todayLocal(), note });
+      await action();
       onChanged(message);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't save. Try again.");
@@ -120,307 +135,133 @@ function BillingsCard({ person: p, onChanged }: { person: PersonDetail; onChange
     }
   }
 
-  async function undo(b: PersonBilling) {
-    const payment = p.payments.find((pay) => pay.note === paidNote(b));
-    if (!payment) return;
-    setBusy(b.key);
-    try {
-      await api.deletePersonPayment(p.id, payment.id);
-      onChanged(`Billing due ${shortDate(b.dueDate)} marked unpaid`);
-    } finally {
-      setBusy(null);
-    }
+  const pay = (key: string, amountMinor: number, note: string, itemKey: string | null, message: string) =>
+    run(key, () => api.addPersonPayment(p.id, { amountMinor, paidOn: todayLocal(), note, itemKey }), message);
+  const remove = (key: string, payment: PersonPayment, message: string) => run(key, () => api.deletePersonPayment(p.id, payment.id), message);
+
+  function renderMonth(g: ItemGroup, m: PlanMonth) {
+    const left = m.amountMinor - m.paidMinor;
+    // Each month's "Paid" is a repayment for that month only; its Undo takes back the latest one.
+    const undoable = m.paid ? g.payments.find((pay) => pay.itemKey === m.monthKey) : undefined;
+    const busyKey = `${g.key}:${m.key}`;
+    return (
+      <li key={m.key} className={`share-row share-row--action${m.upcoming && !m.paid ? " share-row--upcoming" : ""}`}>
+        <span className="share-row__date">{shortDate(m.occurredOn)}</span>
+        <span className="share-row__what">
+          {monthName(g, m)}
+          <small>
+            Due {shortDate(m.dueDate)}
+            {m.amountMinor !== m.totalMinor && ` · their part of ${formatMoney(m.totalMinor)}`}
+            {!m.paid && m.paidMinor > 0 && ` · ${formatMoney(m.paidMinor)} paid`}
+          </small>
+        </span>
+        {monthBadge(m)}
+        <Amount minorUnits={m.amountMinor} tone="neutral" />
+        <span className="share-row__action">
+          {left > 0 ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={busy === busyKey}
+              disabled={busy !== null && busy !== busyKey}
+              onClick={() => pay(busyKey, left, monthNote(g, m), m.monthKey, `${monthName(g, m)} of ${g.title} paid`)}
+            >
+              Paid
+            </Button>
+          ) : undoable ? (
+            <Button size="sm" variant="ghost" loading={busy === busyKey} onClick={() => remove(busyKey, undoable, `${monthName(g, m)} of ${g.title} marked unpaid`)}>
+              Undo
+            </Button>
+          ) : null}
+        </span>
+      </li>
+    );
   }
 
   return (
     <Card
-      title="Billings"
-      subtitle={`${p.name}'s charges by statement, including installment months still to come. Unpaid after the due date moves to the next billing.`}
+      title="Items"
+      subtitle={`What ${p.name} has a part of. Open an item to pay a month, or pay the whole item.`}
       padding="none"
-      action={
-        owing > 0 && (
-          <Button size="sm" onClick={() => setConfirmAll(true)} loading={busy === "all"}>
-            Paid all
-          </Button>
-        )
-      }
     >
       {error && (
         <p className="cat-editor__error" role="alert">
           {error}
         </p>
       )}
-      {p.billings.length === 0 ? (
+      {items.length === 0 ? (
         <EmptyState heading="No charges yet">Pick {p.name} under "For" when you add a charge or installment, or split one with them.</EmptyState>
       ) : (
-        <>
-          {coming.length > 0 && (
-            <>
-              <h3 className="bill-section">Coming up</h3>
-              <ul className="bill-list">{coming.map(renderBilling)}</ul>
-            </>
-          )}
-          {past.length > 0 && (
-            <>
-              <h3 className="bill-section">Past billings</h3>
-              <ul className="bill-list">{past.map(renderBilling)}</ul>
-            </>
-          )}
-        </>
-      )}
-      <ConfirmDialog
-        open={confirmAll}
-        title="Mark everything as paid?"
-        message={`${p.name} paid you ${formatMoney(owing)}: every billing is settled${p.upcomingMinor > 0 ? `, including installment months not billed yet (${formatMoney(p.upcomingMinor)}), paid in advance` : ""}.`}
-        confirmLabel="Paid all"
-        onConfirm={() => pay(owing, PAID_ALL_NOTE, "all", `All billings paid (${formatMoney(owing)})`)}
-        onClose={() => setConfirmAll(false)}
-      />
-    </Card>
-  );
-
-  function renderBilling(b: PersonBilling) {
-            const canUndo = b.status === "paid" && p.payments.some((pay) => pay.note === paidNote(b));
-            // Open what needs attention: unpaid, part-paid, and the next billing to pay.
-            const open = b.status === "unpaid" || b.status === "partial" || b.key === nextKey;
-            const futureOnly = b.items.every((i) => i.upcoming);
+        <ul className="bill-list">
+          {items.map((g) => {
+            const left = g.totalMinor - g.paidMinor;
+            const paidMonths = g.months.filter((m) => m.paid).length;
+            const lastPayment = g.payments[0];
             return (
-              <li key={b.key}>
-                <details className={`bill bill--${b.status}`} open={open}>
+              <li key={g.key}>
+                <details className={`bill item${left === 0 ? " bill--paid" : ""}`} open={left > 0 && g.months.some((m) => m.pastDue && !m.paid)}>
                   <summary className="bill__head">
                     <span className="bill__when">
-                      <strong>{b.closeDate ? `Due ${shortDate(b.dueDate)}` : `Cash or debit · ${monthName(b.dueDate)}`}</strong>
+                      <strong>{g.title}</strong>
                       <small>
-                        {b.cardName ? `${b.cardName} · statement ${shortDate(b.closeDate!)}` : `Due ${shortDate(b.dueDate)}`} · {b.items.length} charge
-                        {b.items.length === 1 ? "" : "s"}
-                        {futureOnly && " · not billed yet"}
+                        {g.plan
+                          ? `${g.plan.cardName} · ${g.plan.months} months · ${paidMonths} of ${g.months.length} paid`
+                          : `${g.months[0]!.installmentId === null ? "Straight" : "Installment"} · ${shortDate(g.months[0]!.occurredOn)}`}
+                      </small>
+                      <small>
+                        Paid {formatMoney(g.paidMinor)} of {formatMoney(g.totalMinor)}
+                        {left > 0 && ` · ${formatMoney(left)} left`}
                       </small>
                     </span>
-                    {billingStatus(b)}
-                    <Amount minorUnits={b.amountMinor} tone="neutral" />
-                  </summary>
-                  <div className="bill__body">
-                    {b.carriedInMinor > 0 && (
-                      <p className="bill__note">
-                        + {formatMoney(b.carriedInMinor)} carried over from unpaid billings: {formatMoney(b.remainingMinor + b.carriedInMinor)} due{" "}
-                        {shortDate(b.dueDate)}.
-                      </p>
-                    )}
-                    {b.status === "unpaid" && (
-                      <p className="bill__note bill__note--warn">
-                        Not paid by {shortDate(b.dueDate)}.{" "}
-                        {b.movedTo ? `${formatMoney(b.remainingMinor)} moved to the billing due ${shortDate(b.movedTo)}.` : `${formatMoney(b.remainingMinor)} is still owed.`}
-                      </p>
-                    )}
-                    {b.status === "partial" && <p className="bill__note">{formatMoney(b.paidMinor)} paid, {formatMoney(b.remainingMinor)} left.</p>}
-                    <ul className="share-list">
-                      {b.items.map((s) => (
-                        <li key={s.key} className={s.upcoming ? "share-row share-row--upcoming" : "share-row"}>
-                          <span className="share-row__date">{shortDate(s.occurredOn)}</span>
-                          <span className="share-row__what">
-                            {s.description}
-                            <small>
-                              {s.upcoming ? "Installment · not billed yet" : s.installmentId !== null ? "Installment" : "Straight"}
-                              {s.amountMinor !== s.totalMinor && ` · their part of ${formatMoney(s.totalMinor)}`}
-                            </small>
-                          </span>
-                          <Amount minorUnits={s.amountMinor} tone="neutral" />
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="bill__actions">
-                      {b.remainingMinor > 0 ? (
-                        <Button
-                          size="sm"
-                          loading={busy === b.key}
-                          disabled={busy !== null && busy !== b.key}
-                          onClick={() => pay(b.payMinor, paidNote(b), b.key, `Billing due ${shortDate(b.dueDate)} paid`)}
-                        >
-                          {b.payMinor > b.remainingMinor ? `Paid · ${formatMoney(b.payMinor)} incl. earlier` : `Paid · ${formatMoney(b.payMinor)}`}
+                    {/* In the header, so a click here mustn't also fold the item open or shut. */}
+                    <span className="item__head-action" onClick={(e) => e.preventDefault()}>
+                      {left > 0 ? (
+                        <Button size="sm" loading={busy === g.key} disabled={busy !== null && busy !== g.key} onClick={() => setConfirm(g)}>
+                          Full paid {formatMoney(left)}
                         </Button>
-                      ) : canUndo ? (
-                        <Button size="sm" variant="ghost" loading={busy === b.key} onClick={() => undo(b)}>
-                          Undo paid
+                      ) : lastPayment ? (
+                        <Button size="sm" variant="ghost" loading={busy === g.key} onClick={() => remove(g.key, lastPayment, `Last payment for ${g.title} undone`)}>
+                          Undo
                         </Button>
                       ) : null}
-                    </div>
+                    </span>
+                  </summary>
+                  <div className="bill__body">
+                    <ul className="share-list">{g.months.map((m) => renderMonth(g, m))}</ul>
+                    {g.plan && (
+                      <div className="bill__actions">
+                        <a className="link-text item__link" href={`/cards/${g.plan.cardId}`} onClick={linkClick}>
+                          Open the plan on {g.plan.cardName}
+                        </a>
+                      </div>
+                    )}
                   </div>
                 </details>
               </li>
             );
-  }
-}
-
-/**
- * Installments by billing: each billing (due date) folds open to the plans billed on it, and each plan folds
- * open to all its months. "Paid all" on a billing pays that billing (and anything unpaid before it, oldest first).
- */
-function InstallmentsCard({ person: p, onChanged }: { person: PersonDetail; onChanged: (message: string) => void }) {
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const today = todayLocal();
-  // Only billings with an installment month in them.
-  const withPlans = p.billings.filter((b) => b.items.some((i) => i.installmentId !== null));
-  const coming = withPlans.filter((b) => b.dueDate >= today);
-  const past = withPlans.filter((b) => b.dueDate < today).reverse();
-  const nextKey = coming.find((b) => b.remainingMinor > 0)?.key;
-
-  async function payBilling(b: PersonBilling) {
-    setError(null);
-    setBusy(b.key);
-    try {
-      await api.addPersonPayment(p.id, { amountMinor: b.payMinor, paidOn: today, note: paidNote(b) });
-      onChanged(`Billing due ${shortDate(b.dueDate)} paid`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save. Try again.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function undo(b: PersonBilling) {
-    const payment = p.payments.find((pay) => pay.note === paidNote(b));
-    if (!payment) return;
-    setBusy(b.key);
-    try {
-      await api.deletePersonPayment(p.id, payment.id);
-      onChanged(`Billing due ${shortDate(b.dueDate)} marked unpaid`);
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  function renderBilling(b: PersonBilling) {
-    const items = b.items.filter((i) => i.installmentId !== null);
-    const planTotal = items.reduce((sum, i) => sum + i.amountMinor, 0);
-    // What "Paid all" pays beyond these installment months: earlier unpaid billings, and straight charges on this one.
-    const earlier = b.payMinor - b.remainingMinor;
-    const straight = b.remainingMinor - items.filter((i) => !i.paid).reduce((sum, i) => sum + i.amountMinor, 0);
-    const extra = [earlier > 0 && "earlier unpaid", straight > 0 && "other charges"].filter(Boolean).join(" and ");
-    const canUndo = b.status === "paid" && p.payments.some((pay) => pay.note === paidNote(b));
-    const open = b.status === "unpaid" || b.status === "partial" || b.key === nextKey;
-    return (
-      <li key={b.key}>
-        <details className={`bill bill--${b.status}`} open={open}>
-          <summary className="bill__head">
-            <span className="bill__when">
-              <strong>Due {shortDate(b.dueDate)}</strong>
-              <small>
-                {b.cardName} · {items.length} installment{items.length === 1 ? "" : "s"}
-                {items.every((i) => i.upcoming) && " · not billed yet"}
-              </small>
-            </span>
-            {billingStatus(b)}
-            <Amount minorUnits={planTotal} tone="neutral" />
-          </summary>
-          <div className="bill__body">
-            {b.status === "unpaid" && (
-              <p className="bill__note bill__note--warn">
-                Not paid by {shortDate(b.dueDate)}.{b.movedTo ? ` Moved to the billing due ${shortDate(b.movedTo)}.` : ""}
-              </p>
-            )}
-            <ul className="bill-list bill-list--nested">
-              {items.map((item) => {
-                const plan = p.plans.find((pl) => pl.installmentId === item.installmentId);
-                const months = planMonths(p, item.installmentId!);
-                const current = months.find((m) => m.key === item.key);
-                return (
-                  <li key={item.key}>
-                    <details className="bill plan">
-                      <summary className="bill__head plan__head">
-                        <span className="share-row__what">
-                          {plan?.description ?? item.description}
-                          <small>
-                            {monthLabel(item.description, plan?.description ?? "")}
-                            {plan && ` · ${months.filter((m) => m.paid).length} of ${plan.months} paid`}
-                          </small>
-                        </span>
-                        {current && monthBadge(current)}
-                        <Amount minorUnits={item.amountMinor} tone="neutral" />
-                      </summary>
-                      <div className="bill__body">
-                        <ul className="share-list">
-                          {months.map((m) => (
-                            <li
-                              key={m.key}
-                              className={`share-row${m.upcoming && !m.paid ? " share-row--upcoming" : ""}${m.key === item.key ? " share-row--current" : ""}`}
-                            >
-                              <span className="share-row__date">{shortDate(m.occurredOn)}</span>
-                              <span className="share-row__what">
-                                {monthLabel(m.description, plan?.description ?? "")}
-                                <small>
-                                  Due {shortDate(m.dueDate)}
-                                  {m.amountMinor !== m.totalMinor && ` · their part of ${formatMoney(m.totalMinor)}`}
-                                </small>
-                              </span>
-                              {monthBadge(m)}
-                              <Amount minorUnits={m.amountMinor} tone="neutral" />
-                            </li>
-                          ))}
-                        </ul>
-                        {plan && (
-                          <p className="bill__note">
-                            {plan.status === "active" ? `${formatMoney(plan.upcomingMinor)} left · ` : ""}
-                            <a className="link-text" href={`/cards/${plan.cardId}`} onClick={linkClick}>
-                              Open the plan on {plan.cardName}
-                            </a>
-                          </p>
-                        )}
-                      </div>
-                    </details>
-                  </li>
-                );
-              })}
-            </ul>
-            <div className="bill__actions">
-              {b.remainingMinor > 0 ? (
-                <Button size="sm" loading={busy === b.key} disabled={busy !== null && busy !== b.key} onClick={() => payBilling(b)}>
-                  {extra ? `Paid all · ${formatMoney(b.payMinor)} incl. ${extra}` : `Paid all · ${formatMoney(b.payMinor)}`}
-                </Button>
-              ) : canUndo ? (
-                <Button size="sm" variant="ghost" loading={busy === b.key} onClick={() => undo(b)}>
-                  Undo paid
-                </Button>
-              ) : null}
-            </div>
-          </div>
-        </details>
-      </li>
-    );
-  }
-
-  return (
-    <Card title="Installments" subtitle={`${p.name}'s installment months by billing. Open a plan to see all its months.`} padding="none">
-      {error && (
-        <p className="cat-editor__error" role="alert">
-          {error}
-        </p>
+          })}
+        </ul>
       )}
-      {coming.length > 0 && (
-        <>
-          <h3 className="bill-section">Coming up</h3>
-          <ul className="bill-list">{coming.map(renderBilling)}</ul>
-        </>
-      )}
-      {past.length > 0 && (
-        <>
-          <h3 className="bill-section">Past billings</h3>
-          <ul className="bill-list">{past.map(renderBilling)}</ul>
-        </>
-      )}
+      <ConfirmDialog
+        open={confirm !== null}
+        title={confirm ? `Mark ${confirm.title} as fully paid?` : ""}
+        message={
+          confirm
+            ? `${p.name} paid you ${formatMoney(confirm.totalMinor - confirm.paidMinor)} for ${confirm.title}${confirm.months.some((m) => m.upcoming && !m.paid) ? ", including months not billed yet (paid in advance)" : ""}.`
+            : ""
+        }
+        confirmLabel="Full paid"
+        onConfirm={async () => {
+          if (confirm) await pay(confirm.key, confirm.totalMinor - confirm.paidMinor, `Paid in full: ${confirm.title}`, confirm.key, `${confirm.title} paid in full`);
+        }}
+        onClose={() => setConfirm(null)}
+      />
     </Card>
   );
 }
 
-type PlanMonth = PersonBilling["items"][number] & { dueDate: string; pastDue: boolean };
+type PlanMonth = PersonBilling["items"][number] & { dueDate: string; pastDue: boolean; cardName: string | null };
 
-/** One plan's months (billed and still to come), oldest first, each with its billing's due date. */
-function planMonths(p: PersonDetail, installmentId: number): PlanMonth[] {
-  const today = todayLocal();
-  return p.billings
-    .flatMap((b) => b.items.filter((i) => i.installmentId === installmentId).map((i) => ({ ...i, dueDate: b.dueDate, pastDue: b.dueDate < today })))
-    .sort((a, b) => a.occurredOn.localeCompare(b.occurredOn) || a.key.localeCompare(b.key));
-}
 
 /** "Laptop (4/12)" → "Month 4 of 12"; "Laptop (processing fee)" → "Processing fee". */
 function monthLabel(description: string, plan: string) {
@@ -436,7 +277,6 @@ function monthBadge(m: PlanMonth) {
   return <span className="bill-badge">Due</span>;
 }
 
-const monthName = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-PH", { month: "long", year: "numeric" });
 
 type Mode = "repay" | "rename" | "delete" | { deletePayment: PersonPayment } | null;
 
@@ -460,6 +300,7 @@ export function PersonPage({ id }: { id: number }) {
           return (
             <>
               <PageHeader
+                back={{ href: "/people", label: "People" }}
                 title={p.name}
                 subtitle={
                   <a className="link-text" href="/people" onClick={linkClick}>
@@ -528,9 +369,8 @@ export function PersonPage({ id }: { id: number }) {
               </section>
 
               <div className="person-sections">
-              {p.plans.length > 0 && <InstallmentsCard person={p} onChanged={changed} />}
+              <ItemsCard person={p} onChanged={changed} />
 
-              <BillingsCard person={p} onChanged={changed} />
 
               <Card title="Repayments" subtitle="Money they've given back" padding="none">
                 {p.payments.length === 0 ? (

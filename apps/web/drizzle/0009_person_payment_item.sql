@@ -1,0 +1,1 @@
+ALTER TABLE `person_payments` ADD `item_key` text;

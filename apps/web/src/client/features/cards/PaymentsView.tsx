@@ -1,6 +1,6 @@
 import { Badge, Button, Card, formatMoney, TextField } from "@mft/ui";
 import { useState } from "react";
-import type { CardPayment, CardSummary, Category, InstallmentDetail, ScheduleEntry } from "../../../shared/contracts";
+import { loanTypeLabels, type CardPayment, type CardSummary, type Category, type InstallmentDetail, type ScheduleEntry } from "../../../shared/contracts";
 import { nextClose } from "../../../shared/cardCycle";
 import { api } from "../../api/endpoints";
 import { ConfirmDialog } from "../../layout/ConfirmDialog";
@@ -12,6 +12,7 @@ import { categoryColor } from "../../lib/categoryColor";
 import { monthLabel, shortDate, todayLocal } from "../../lib/dates";
 import { useAsync } from "../../lib/useAsync";
 import { InstallmentEditor } from "./InstallmentEditor";
+import { LoanForm } from "./LoanForm";
 import { OtherCharges } from "./OtherCharges";
 
 interface PaymentsViewProps {
@@ -26,7 +27,7 @@ interface PaymentsViewProps {
 }
 
 type Mode =
-  | { kind: "add" }
+  | { kind: "add" | "loan" }
   | { kind: "edit" | "preterminate" | "delete"; plan: InstallmentDetail }
   | { kind: "delete-payment"; payment: CardPayment }
   | null;
@@ -49,16 +50,25 @@ export function PaymentsView({ card, categories, payments, cards, onRecordPaymen
   }
 
   const paidTotal = payments.reduce((sum, p) => sum + p.amountMinor, 0);
+  // An online credit account (SpayLater, SLoan…) shows just its loans; a bank card also has everyday charges and payments.
+  const loansOnly = card.kind === "online";
 
   return (
     <Card
-      title="Charges and payments"
-      subtitle="Everyday charges by statement, installment plans, and what you've paid"
+      title={loansOnly ? "Loans" : "Charges and payments"}
+      subtitle={loansOnly ? "Each loan with its monthly schedule" : "Everyday charges by statement, installment plans, and what you've paid"}
       padding="none"
       action={
-        <Button variant="ghost" size="sm" iconStart={<PlusIcon />} onClick={() => setMode({ kind: "add" })} disabled={card.archived}>
-          Add installment
-        </Button>
+        <span className="pgroups__add">
+          {card.kind === "bank" && (
+            <Button variant="ghost" size="sm" iconStart={<PlusIcon />} onClick={() => setMode({ kind: "add" })} disabled={card.archived}>
+              Add installment
+            </Button>
+          )}
+          <Button variant={card.kind === "online" ? "secondary" : "ghost"} size="sm" iconStart={<PlusIcon />} onClick={() => setMode({ kind: "loan" })} disabled={card.archived}>
+            Add loan
+          </Button>
+        </span>
       }
     >
       <Loadable state={plans.state} reload={plans.reload} what="installments" skeleton="bars">
@@ -67,11 +77,15 @@ export function PaymentsView({ card, categories, payments, cards, onRecordPaymen
           return (
             <div className="pgroups">
               {/* Everyday charges first: the group that changes daily. Then plans, then payments. */}
-              <OtherCharges card={card} categories={categories} cards={cards} onChanged={onChanged} />
+              {!loansOnly && <OtherCharges card={card} categories={categories} cards={cards} onChanged={onChanged} />}
               {ordered.map((plan) => (
                 <PlanGroup key={plan.id} plan={plan} onAction={(kind) => setMode({ kind, plan })} />
               ))}
+              {loansOnly && ordered.length === 0 && (
+                <EmptyState heading="No loans yet">Use Add loan to record what you borrowed from {card.name}.</EmptyState>
+              )}
 
+              {!loansOnly && (
               <details className="pgroup" open>
                 <summary className="pgroup__head">
                   <span className="pgroup__title">
@@ -112,6 +126,7 @@ export function PaymentsView({ card, categories, payments, cards, onRecordPaymen
                   </Button>
                 </div>
               </details>
+              )}
             </div>
           );
         }}
@@ -131,6 +146,10 @@ export function PaymentsView({ card, categories, payments, cards, onRecordPaymen
             onCancel={() => setMode(null)}
           />
         )}
+      </Dialog>
+
+      <Dialog open={mode?.kind === "loan"} onClose={() => setMode(null)} title={`Add a loan to ${card.name}`}>
+        {mode?.kind === "loan" && <LoanForm card={card} categories={categories} onSaved={changed} onCancel={() => setMode(null)} />}
       </Dialog>
 
       <Dialog open={mode?.kind === "preterminate"} onClose={() => setMode(null)} title={mode?.kind === "preterminate" ? `Pre-terminate ${mode.plan.description}` : "Pre-terminate"}>
@@ -198,6 +217,7 @@ function PlanGroup({ plan, onAction }: { plan: InstallmentDetail; onAction: (kin
           <span className="pgroup__name">{plan.description}</span>
           <span className="pgroup__sub">
             <Badge category={categoryColor(plan.category.color)}>{plan.category.name}</Badge>
+            {plan.loanType && <Badge tone="goal">{loanTypeLabels[plan.loanType]}</Badge>}
             {plan.preterminatedOn ? "Pre-terminated" : active ? `${plan.monthsBilled} of ${plan.months}` : "Completed"}
             {plan.addOnRateBps > 0 && ` · ${plan.addOnRateBps / 100}% a month`}
           </span>

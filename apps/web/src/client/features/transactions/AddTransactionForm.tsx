@@ -19,6 +19,11 @@ interface AddTransactionFormProps {
   cards?: Card[];
   /** Start with this card under "Paid with" (e.g. "Add charge" on a card page). */
   defaultCardId?: number;
+  /**
+   * Whether "Cash or debit" is offered under "Paid with". A section limits the choices to its own:
+   * a card page passes only cards of its kind with this off; Cash & Others passes no cards.
+   */
+  allowCash?: boolean;
   /** Edit this transaction instead of adding one: fields start filled in, and saving updates it. */
   transaction?: Transaction;
   /** Called after a successful save, so the page can refresh its lists. */
@@ -32,14 +37,16 @@ const usualFor = (card: Card | undefined): SplitInput | null =>
   card?.defaultPersonId ? { mode: "equal", parts: [{ personId: card.defaultPersonId, value: 1 }] } : null;
 
 /** Adds a transaction, or edits one when `transaction` is given (same fields, same validation). */
-export function AddTransactionForm({ type, categories, cards = [], defaultCardId, transaction: tx, onAdded }: AddTransactionFormProps) {
+export function AddTransactionForm({ type, categories, cards = [], defaultCardId, allowCash = true, transaction: tx, onAdded }: AddTransactionFormProps) {
   const [amountText, setAmountText] = useState(tx ? (tx.amountMinor / 100).toFixed(2) : "");
   const [description, setDescription] = useState(tx?.description ?? "");
   const [categoryId, setCategoryId] = useState(tx ? String(tx.category.id) : "");
   const [occurredOn, setOccurredOn] = useState(tx?.occurredOn ?? todayLocal());
   const [note, setNote] = useState(tx?.note ?? "");
   // "" = cash or debit, else a card id.
-  const [paidWith, setPaidWith] = useState(tx?.card ? String(tx.card.id) : defaultCardId ? String(defaultCardId) : "");
+  const [paidWith, setPaidWith] = useState(
+    tx?.card ? String(tx.card.id) : defaultCardId ? String(defaultCardId) : !allowCash && cards[0] ? String(cards[0].id) : "",
+  );
   // Who it's for. A new charge starts with the card's usual person, until you choose yourself.
   const [split, setSplit] = useState<SplitInput | null>(() => (tx ? tx.split : usualFor(cards.find((c) => c.id === defaultCardId))));
   const [splitTouched, setSplitTouched] = useState(false);
@@ -161,6 +168,8 @@ export function AddTransactionForm({ type, categories, cards = [], defaultCardId
         options={[{ value: "", label: "Choose a category" }, ...categoryOptions(categories, type)]}
       />
 
+      {type === "expense" && cardChoices.length === 0 && allowCash && <TextField label="Paid with" value="Cash or debit" readOnly />}
+
       {type === "expense" && cardChoices.length > 0 && (
         <Select
           label="Paid with"
@@ -169,7 +178,8 @@ export function AddTransactionForm({ type, categories, cards = [], defaultCardId
           error={errors.cardId}
           prefix={selectedCard && <ColorDot color={categoryColor(selectedCard.color)} />}
           options={[
-            { value: "", label: "Cash or debit" },
+            // An edited cash expense keeps "Cash or debit" even where the section is cards only.
+            ...(allowCash || (tx && !tx.card) ? [{ value: "", label: "Cash or debit" }] : []),
             ...cardChoices.map((c) => ({ value: String(c.id), label: c.last4 ? `${c.name} ••${c.last4}` : c.name })),
           ]}
         />

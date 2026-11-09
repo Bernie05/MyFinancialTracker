@@ -33,7 +33,7 @@ export function CardFace({ card, size = "md" }: { card: Card; size?: "md" | "lg"
   return (
     <div className={`card-face card-face--${size}`} style={faceStyle(card.color)}>
       <div className="card-face__top">
-        <span className="card-face__issuer">{card.issuer ?? "Credit card"}</span>
+        <span className="card-face__issuer">{card.issuer ?? (card.kind === "online" ? "Online credit" : "Credit card")}</span>
         <span className="card-face__chip" aria-hidden="true" />
       </div>
       <span className="card-face__name">{card.name}</span>

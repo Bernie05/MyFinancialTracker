@@ -1,12 +1,17 @@
 import { navigate } from "../lib/router";
 
+/** Pages that keep an add form on screen; elsewhere, quick add opens Cash & Others' Add expense dialog. */
+const withForm = ["/income/other", "/expenses/all"];
+
 /**
- * "Add transaction" from anywhere: go to Expenses (unless already on a ledger page), then put
- * the cursor in the add form's amount field. The timeout lets the new page render first.
+ * "Add transaction" from anywhere. On a page with an add form, put the cursor in its amount field
+ * (the timeout lets the page render first); everywhere else, open Add expense on Cash & Others.
  */
 export function startAddTransaction() {
-  const path = window.location.pathname;
-  if (path !== "/expenses" && path !== "/income") navigate("/expenses");
+  if (!withForm.includes(window.location.pathname)) {
+    navigate("/expenses/cash?add=1");
+    return;
+  }
   setTimeout(() => {
     const amount = document.getElementById("add-amount");
     amount?.scrollIntoView({ block: "center" });

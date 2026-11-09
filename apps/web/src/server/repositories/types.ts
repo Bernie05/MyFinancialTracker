@@ -10,7 +10,8 @@ import type {
   CardPayment,
   Category,
   CategoryListItem,
-  Month, MonthSummary, MonthTotals, Person, PersonPayment, PersonShare, PersonSummary, Transaction, TransactionPage, TransactionQuery } from "../../shared/contracts";
+  LoanType,
+  Month, MonthlyFilters, MonthSummary, MonthTotals, Person, PersonPayment, PersonShare, PersonSummary, RangeSummary, SalaryProfile, Transaction, TransactionPage, TransactionQuery } from "../../shared/contracts";
 import type { Split } from "../../shared/split";
 import type { TransactionType } from "../db/schema";
 
@@ -68,7 +69,16 @@ export interface SummaryRepository {
   /** With `cardId`, only that credit card's charges. */
   forMonth(month: Month, cardId?: number): Promise<MonthSummary>;
   /** Income and expense per month for `months` months ending with `to`, oldest first; empty months are zeros. */
-  monthly(to: Month, months: number, cardId?: number): Promise<MonthTotals[]>;
+  monthly(to: Month, months: number, filters?: MonthlyFilters): Promise<MonthTotals[]>;
+  /** Like forMonth, over the whole months `from`…`to` (both included). */
+  range(from: Month, to: Month): Promise<RangeSummary>;
+}
+
+export interface SalaryRepository {
+  /** Undefined until you set it up. */
+  get(): Promise<SalaryProfile | undefined>;
+  /** Creates or replaces the salary and all its deductions, in one DB transaction. */
+  save(profile: SalaryProfile): Promise<SalaryProfile>;
 }
 
 export type CardData = Omit<Card, "id" | "archived"> & { archived?: boolean };
@@ -92,6 +102,8 @@ export interface CardRepository {
   update(id: number, data: Partial<CardData>): Promise<Card>;
   /** Deletes the card and its payments. Callers make sure no transactions use it. */
   remove(id: number): Promise<void>;
+  /** Deletes the card with everything on it: its charges, loans and installment plans (and their billed months), and payments. */
+  removeWithHistory(id: number): Promise<void>;
   totals(id: number, dates: { statementDate: string; cycleFrom: string; today: string }): Promise<CardTotals>;
   payments(cardId: number): Promise<CardPayment[]>;
   addPayment(cardId: number, data: { amountMinor: number; paidOn: string; note: string | null }): Promise<CardPayment>;
@@ -107,6 +119,7 @@ export interface Repositories {
   installments: InstallmentRepository;
   imports: ImportRepository;
   people: PeopleRepository;
+  salary: SalaryRepository;
 }
 
 export interface PeopleRepository {
@@ -121,7 +134,7 @@ export interface PeopleRepository {
   remove(id: number): Promise<void>;
   shares(personId: number): Promise<PersonShare[]>;
   payments(personId: number): Promise<PersonPayment[]>;
-  addPayment(personId: number, data: { amountMinor: number; paidOn: string; note: string | null }): Promise<PersonPayment>;
+  addPayment(personId: number, data: { amountMinor: number; paidOn: string; note: string | null; itemKey: string | null }): Promise<PersonPayment>;
   removePayment(personId: number, paymentId: number): Promise<boolean>;
 }
 
@@ -165,6 +178,7 @@ export interface InstallmentRow {
   firstBillingMonth: string;
   preterminatedOn: string | null;
   split: Split | null;
+  loanType: LoanType | null;
 }
 
 export type InstallmentData = Omit<InstallmentRow, "id" | "cardId" | "category"> & { categoryId: number };

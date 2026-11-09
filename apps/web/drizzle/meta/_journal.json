@@ -64,6 +64,34 @@
       "when": 1794113722361,
       "tag": "0008_people_and_splits",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1794158941365,
+      "tag": "0009_person_payment_item",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1794207920171,
+      "tag": "0010_salary",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1794210527568,
+      "tag": "0011_card_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1794217326445,
+      "tag": "0012_loan_type",
+      "breakpoints": true
     }
   ]
 }

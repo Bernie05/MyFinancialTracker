@@ -33,6 +33,8 @@ export function useTransactionFilters(type: TransactionType) {
   const categoryId = Number(get("categoryId")) > 0 ? Number(get("categoryId")) : undefined;
   // Set by a card page's "View all charges" link: only that card's expenses.
   const cardId = Number(get("cardId")) > 0 ? Number(get("cardId")) : undefined;
+  // ?all=1 lifts the page's own scope (Cash & Others: cash only; Other Income: no salary).
+  const showAll = get("all") === "1";
   const q = get("q")?.trim() || undefined;
   const page = Math.max(1, Math.floor(Number(get("page"))) || 1);
   const pageSizeParam = Number(get("pageSize"));
@@ -71,9 +73,9 @@ export function useTransactionFilters(type: TransactionType) {
           reset: () => update({ range: unit === "month" ? "month" : range, at: undefined }),
         }
       : null;
-  const filtered = range !== "month" || stepped !== undefined || categoryId !== undefined || cardId !== undefined || q !== undefined;
+  const filtered = range !== "month" || stepped !== undefined || categoryId !== undefined || cardId !== undefined || q !== undefined || showAll;
 
-  return { type, range, from, to, step, stepped: stepped !== undefined, categoryId, cardId, q, page, pageSize, update, clear, filtered };
+  return { type, range, from, to, step, stepped: stepped !== undefined, categoryId, cardId, showAll, q, page, pageSize, update, clear, filtered };
 }
 
 export type TransactionFiltersState = ReturnType<typeof useTransactionFilters>;

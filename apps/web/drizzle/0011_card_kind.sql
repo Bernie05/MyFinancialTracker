@@ -1,0 +1,1 @@
+ALTER TABLE `credit_cards` ADD `kind` text DEFAULT 'bank' NOT NULL;

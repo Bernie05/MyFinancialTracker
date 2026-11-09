@@ -13,10 +13,12 @@ interface TransactionFiltersProps {
   categories: Category[];
   /** When the list is narrowed to one card (cardId in the URL), its name for the removable chip. */
   cardName?: string;
+  /** The page's own narrowing while it's on ("Cash & debit only"): a chip whose × shows everything. */
+  scope?: { label: string; removeLabel: string } | null;
 }
 
 /** One row of filters above the list: date range, category, search. Every change resets to page 1. */
-export function TransactionFilters({ filters, categories, cardName }: TransactionFiltersProps) {
+export function TransactionFilters({ filters, categories, cardName, scope }: TransactionFiltersProps) {
   const { range, from, to, step, stepped, categoryId, q, update, clear, filtered, type } = filters;
   const steppedAway = step && stepped && !step.isCurrent ? step : null;
   const [text, setText] = useState(q ?? "");
@@ -96,6 +98,14 @@ export function TransactionFilters({ filters, categories, cardName }: Transactio
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
+      {scope && (
+        <span className="filter-chip">
+          {scope.label}
+          <button type="button" className="filter-chip__remove" aria-label={scope.removeLabel} onClick={() => update({ all: 1 })}>
+            ×
+          </button>
+        </span>
+      )}
       {filters.cardId !== undefined && (
         <span className="filter-chip">
           Paid with {cardName ?? "a card"}

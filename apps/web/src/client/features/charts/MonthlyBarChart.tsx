@@ -13,6 +13,8 @@ export interface MonthlyBarChartProps {
   series: ChartSeries[];
   /** Accessible summary of the chart, read instead of the SVG. */
   description: string;
+  /** False hides the "Show as table" link, for a page that shows the table in its own tab. */
+  tableToggle?: boolean;
 }
 
 const HEIGHT = 240;
@@ -38,7 +40,7 @@ function barPath(x: number, y: number, w: number, base: number) {
  * Grouped bars per month in inline SVG, colored with design-system tokens so light and dark
  * themes follow the CSS. Hover or focus a month for its values; the table below has every number.
  */
-export function MonthlyBarChart({ data, series, description }: MonthlyBarChartProps) {
+export function MonthlyBarChart({ data, series, description, tableToggle = true }: MonthlyBarChartProps) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [active, setActive] = useState<number | null>(null);
@@ -140,31 +142,64 @@ export function MonthlyBarChart({ data, series, description }: MonthlyBarChartPr
         )}
       </div>
 
-      <details className="chart__table">
-        <summary>Show as table</summary>
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Month</th>
-              {series.map((s) => (
-                <th scope="col" key={s.name}>
-                  <span className="chart__swatch" style={{ background: s.color }} aria-hidden="true" /> {s.name}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((d) => (
-              <tr key={d.label}>
-                <th scope="row">{d.label}</th>
-                {series.map((s, k) => (
-                  <td key={s.name}>{formatMoney(d.values[k] ?? 0)}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </details>
+      {tableToggle && (
+        <details className="chart__table">
+          <summary>Show as table</summary>
+          <ChartTable data={data} series={series} />
+        </details>
+      )}
     </figure>
+  );
+}
+
+export interface ChartTableProps {
+  data: MonthlyBarChartProps["data"];
+  series: ChartSeries[];
+  /** Heading of the first column: "Month", "Quarter", "Year". */
+  periodLabel?: string;
+  /** Adds a "Net" column (first series minus second: income − expenses) and a totals row. */
+  withNet?: boolean;
+}
+
+/** The chart's numbers as a table: one row per column of the chart. */
+export function ChartTable({ data, series, periodLabel = "Month", withNet = false }: ChartTableProps) {
+  const net = (values: number[]) => (values[0] ?? 0) - (values[1] ?? 0);
+  const totals = series.map((_, k) => data.reduce((sum, d) => sum + (d.values[k] ?? 0), 0));
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">{periodLabel}</th>
+          {series.map((s) => (
+            <th scope="col" key={s.name}>
+              <span className="chart__swatch" style={{ background: s.color }} aria-hidden="true" /> {s.name}
+            </th>
+          ))}
+          {withNet && <th scope="col">Net</th>}
+        </tr>
+      </thead>
+      <tbody>
+        {data.map((d) => (
+          <tr key={d.label}>
+            <th scope="row">{d.label}</th>
+            {series.map((s, k) => (
+              <td key={s.name}>{formatMoney(d.values[k] ?? 0)}</td>
+            ))}
+            {withNet && <td className={net(d.values) < 0 ? "chart__neg" : undefined}>{formatMoney(net(d.values))}</td>}
+          </tr>
+        ))}
+      </tbody>
+      {withNet && (
+        <tfoot>
+          <tr>
+            <th scope="row">Total</th>
+            {totals.map((t, k) => (
+              <td key={k}>{formatMoney(t)}</td>
+            ))}
+            <td className={net(totals) < 0 ? "chart__neg" : undefined}>{formatMoney(net(totals))}</td>
+          </tr>
+        </tfoot>
+      )}
+    </table>
   );
 }

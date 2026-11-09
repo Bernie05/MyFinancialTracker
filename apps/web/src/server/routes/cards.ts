@@ -147,9 +147,14 @@ export function createCardRoutes(repos: Repositories) {
         return json(await summarize(updated));
       }),
 
-      // History matters: a card that has charges is archived, not deleted.
+      // History matters: a card that has charges is archived, not deleted, unless the person explicitly
+      // asks to delete it with its history (?history=delete): charges, loans and payments all go.
       DELETE: route(async (req: WithId) => {
         const card = await findCard(req.params.id);
+        if (new URL(req.url).searchParams.get("history") === "delete") {
+          await repos.cards.removeWithHistory(card.id);
+          return new Response(null, { status: 204 });
+        }
         const { transactionCount } = await summarize(card);
         if (transactionCount > 0) {
           throw new HttpError(

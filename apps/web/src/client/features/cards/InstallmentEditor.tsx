@@ -78,6 +78,9 @@ export function InstallmentEditor({ card, plan, categories: loaded, onSaved, onC
   }
   const [override, setOverride] = useState(pesos(plan?.amortizationMinor));
   const [fee, setFee] = useState(pesos(plan?.feeMinor));
+  /** Editing a loan (Add loan): the form shows only the loan's own fields. */
+  // Everything on an online credit account is a loan, even a plan imported without a loan type.
+  const isLoan = plan?.loanType != null || card.kind === "online";
   // Empty = "next statement after the purchase", worked out from the purchase date.
   const [firstMonth, setFirstMonth] = useState(plan?.firstBillingMonth ?? "");
   // Who the plan is for: a new plan starts with the card's usual person.
@@ -231,7 +234,7 @@ export function InstallmentEditor({ card, plan, categories: loaded, onSaved, onC
 
   return (
     <form className="cat-editor" onSubmit={onSubmit} noValidate>
-      <TextField label="What did you buy?" placeholder="iPhone 16 Pro (Power Mac)" maxLength={80} value={description} onChange={(e) => setDescription(e.target.value)} error={errors.description} data-autofocus />
+      <TextField label={isLoan ? "What's it for" : "What did you buy?"} placeholder={isLoan ? "Cash loan" : "iPhone 16 Pro (Power Mac)"} maxLength={80} value={description} onChange={(e) => setDescription(e.target.value)} error={errors.description} data-autofocus />
       <div className="add-form__grid">
         <Select
           label="Category"
@@ -282,9 +285,9 @@ export function InstallmentEditor({ card, plan, categories: loaded, onSaved, onC
           error={errors.newChild}
         />
       )}
-      <TextField label="Purchase date" type="date" value={purchasedOn} onChange={(e) => setPurchasedOn(e.target.value)} error={errors.purchasedOn} />
+      <TextField label={isLoan ? "Loan date" : "Purchase date"} type="date" value={purchasedOn} onChange={(e) => setPurchasedOn(e.target.value)} error={errors.purchasedOn} />
       <div className="add-form__grid">
-        <TextField label="Price (principal)" prefix="₱" inputMode="decimal" placeholder="83,990.00" value={principal} onChange={(e) => setPrincipal(e.target.value)} error={errors.principalMinor} />
+        <TextField label={isLoan ? "Amount" : "Price (principal)"} prefix="₱" inputMode="decimal" placeholder="83,990.00" value={principal} onChange={(e) => setPrincipal(e.target.value)} error={errors.principalMinor} />
         <Select
           label="Term"
           value={term}
@@ -301,6 +304,8 @@ export function InstallmentEditor({ card, plan, categories: loaded, onSaved, onC
       {term === "custom" && (
         <TextField label="Months" type="number" min={1} max={60} value={customMonths} onChange={(e) => chooseMonths(e.target.value, true)} error={errors.months} />
       )}
+      {/* A loan is the amount over the months: no add-on rate, bank figure or fee to edit (stored values are kept). */}
+      {!isLoan && (
       <div className="add-form__grid">
         <TextField
           label="Add-on rate"
@@ -322,8 +327,9 @@ export function InstallmentEditor({ card, plan, categories: loaded, onSaved, onC
           hint="Only if your statement shows a different figure"
         />
       </div>
+      )}
       <div className="add-form__grid">
-        <TextField label="Processing fee" prefix="₱" inputMode="decimal" placeholder="Optional" value={fee} onChange={(e) => setFee(e.target.value)} error={errors.feeMinor} hint="Billed once, with month 1" />
+        {!isLoan && <TextField label="Processing fee" prefix="₱" inputMode="decimal" placeholder="Optional" value={fee} onChange={(e) => setFee(e.target.value)} error={errors.feeMinor} hint="Billed once, with month 1" />}
         <TextField
           label="First billed on"
           type="month"
@@ -371,7 +377,7 @@ export function InstallmentEditor({ card, plan, categories: loaded, onSaved, onC
           Cancel
         </Button>
         <Button type="submit" loading={busy}>
-          {plan ? "Save installment" : "Add installment"}
+          {plan ? (isLoan ? "Save loan" : "Save installment") : "Add installment"}
         </Button>
       </div>
     </form>

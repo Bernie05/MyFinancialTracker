@@ -45,5 +45,6 @@ export function Loadable<T>({ state, reload, what, skeleton = "rows", children }
     );
   }
   if (state.data === undefined) return <Skeleton kind={skeleton} label={`Loading ${what}`} />;
-  return <>{children(state.data)}</>;
+  // Fades in once, when the data first arrives (the div is kept on refetches, so it doesn't fade again).
+  return <div className="loaded-in">{children(state.data)}</div>;
 }

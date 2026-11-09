@@ -100,6 +100,8 @@ export const creditCards = sqliteTable(
     userId: integer("user_id")
       .notNull()
       .references((): AnySQLiteColumn => users.id, { onDelete: "cascade" }),
+    /** "bank": a bank credit card. "online": an online credit line (SPayLater, Lazada PayLater, Home Credit). */
+    kind: text("kind", { enum: ["bank", "online"] }).notNull().default("bank"),
     name: text("name").notNull(),
     issuer: text("issuer"),
     last4: text("last4"),
@@ -190,6 +192,8 @@ export const installments = sqliteTable(
     preterminatedOn: text("preterminated_on"),
     /** Who the plan is for (shared/split.ts); each billed month is split the same way. Null = all yours. */
     split: text("split", { mode: "json" }).$type<Split>(),
+    /** online | bank | personal | debit when the plan is a loan; null = an installment purchase. */
+    loanType: text("loan_type", { enum: ["online", "bank", "personal", "debit"] }),
     createdAt: createdAt(),
   },
   (t) => [
@@ -298,6 +302,8 @@ export const personPayments = sqliteTable(
     amountMinor: integer("amount_minor").notNull(),
     paidOn: text("paid_on").notNull(),
     note: text("note"),
+    /** What it's for: `p<installmentId>` or `t<transactionId>`. Null, or an item that's gone, settles the oldest charges. */
+    itemKey: text("item_key"),
     createdAt: createdAt(),
   },
   (t) => [index("person_payments_person_idx").on(t.personId, t.paidOn), check("person_payments_amount_positive", sql`${t.amountMinor} > 0`)],
@@ -370,6 +376,38 @@ export const debts = sqliteTable(
     check("debts_rate_non_negative", sql`${t.interestRateBps} >= 0`),
     check("debts_due_day_range", sql`${t.dueDay} is null or ${t.dueDay} between 1 and 31`),
   ],
+);
+
+/** Your pay, one row per user. `basis` is how it was entered: gross per month or per year. */
+export const salaryProfiles = sqliteTable(
+  "salary_profiles",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references((): AnySQLiteColumn => users.id, { onDelete: "cascade" }),
+    basis: text("basis", { enum: ["monthly", "annual"] }).notNull(),
+    grossMinor: integer("gross_minor").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("salary_profiles_user_unique").on(t.userId), check("salary_profiles_gross_positive", sql`${t.grossMinor} > 0`)],
+);
+
+/** What comes off each payslip, per month. Replaced as a whole whenever the salary is saved. */
+export const salaryDeductions = sqliteTable(
+  "salary_deductions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references((): AnySQLiteColumn => users.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["tax", "sss", "philhealth", "pagibig", "other"] }).notNull(),
+    name: text("name").notNull(),
+    amountMinor: integer("amount_minor").notNull(),
+    /** Keeps the order you listed them in. */
+    position: integer("position").notNull(),
+  },
+  (t) => [index("salary_deductions_user_idx").on(t.userId, t.position), check("salary_deductions_amount_nonnegative", sql`${t.amountMinor} >= 0`)],
 );
 
 export type CategoryRow = typeof categories.$inferSelect;

@@ -9,10 +9,12 @@ interface EditTransactionDialogProps {
   cards: (Card & { archived?: boolean })[];
   onClose: () => void;
   onSaved: (message: string) => void;
+  /** See AddTransactionForm: off on a card page, where "Paid with" lists only that kind of card. */
+  allowCash?: boolean;
 }
 
 /** The add form, prefilled, in a dialog: one edit flow for every list of transactions. */
-export function EditTransactionDialog({ transaction, categories, cards, onClose, onSaved }: EditTransactionDialogProps) {
+export function EditTransactionDialog({ transaction, categories, cards, onClose, onSaved, allowCash }: EditTransactionDialogProps) {
   return (
     <Dialog open={transaction !== null} onClose={onClose} title={transaction ? `Edit “${transaction.description}”` : "Edit transaction"}>
       {transaction && (
@@ -23,6 +25,7 @@ export function EditTransactionDialog({ transaction, categories, cards, onClose,
             categories={categories}
             cards={cards.filter((c) => !c.archived)}
             transaction={transaction}
+            allowCash={allowCash}
             onAdded={onSaved}
           />
         </div>

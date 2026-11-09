@@ -12,10 +12,10 @@ type Item = MonthSummary["expenseByCategory"][number];
  * button: open it to see the split (subcategory bars use a lighter shade of the parent's color).
  * Every value is printed, so nothing rests on color.
  */
-export function CategoryBars({ items }: { items: Item[] }) {
+export function CategoryBars({ items, emptyHeading = "No expenses this month yet" }: { items: Item[]; emptyHeading?: string }) {
   const [open, setOpen] = useState<number[]>([]);
   const total = items.reduce((sum, i) => sum + i.totalMinor, 0);
-  if (total === 0) return <EmptyState heading="No expenses this month yet">Spending by category shows up here once you add an expense.</EmptyState>;
+  if (total === 0) return <EmptyState heading={emptyHeading}>Spending by category shows up here once you add an expense.</EmptyState>;
   const max = Math.max(...items.map((i) => i.totalMinor));
   const pct = (minor: number) => `${Math.round((minor / total) * 100)}%`;
 

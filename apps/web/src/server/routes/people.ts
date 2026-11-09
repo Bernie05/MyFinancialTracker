@@ -83,6 +83,7 @@ async function plansByPerson(repos: Repositories) {
         const label = entry.kind === "fee" ? "processing fee" : entry.kind === "pretermination" ? "pre-termination" : `${entry.month}/${plan.months}`;
         items.push({
           key: `p${plan.id}-${entry.seq}`,
+          monthKey: `p${plan.id}-${entry.seq}`,
           occurredOn: entry.billedOn,
           description: `${plan.description} (${label})`,
           totalMinor: entry.amountMinor,
@@ -115,10 +116,12 @@ async function plansByPerson(repos: Repositories) {
 }
 
 /** A charge (or a future installment month) going into a billing; whether it's paid is worked out there. */
-type BillingInput = Omit<PersonBilling["items"][number], "paid"> & { cardId: number | null };
+type BillingInput = Omit<PersonBilling["items"][number], "paid" | "paidMinor"> & { cardId: number | null };
 
 const fromShare = (s: PersonShare): BillingInput => ({
   key: `t${s.transactionId}`,
+  // The same key a month had before it was billed, so a repayment for that month still finds it.
+  monthKey: s.installmentId !== null ? `p${s.installmentId}-${s.installmentSeq}` : `t${s.transactionId}`,
   occurredOn: s.occurredOn,
   description: s.description,
   totalMinor: s.totalMinor,
@@ -135,12 +138,25 @@ function endOfMonth(iso: string) {
   return `${y}-${String(m).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
+/** The item a charge belongs to: its installment plan (`p<id>`), or the charge itself (`t<id>`). */
+export const itemKeyOf = (item: { key: string; installmentId: number | null }) => (item.installmentId !== null ? `p${item.installmentId}` : item.key);
+
+const oldestFirst = (a: { occurredOn: string; key: string }, b: { occurredOn: string; key: string }) =>
+  a.occurredOn.localeCompare(b.occurredOn) || a.key.localeCompare(b.key);
+
 /**
- * Groups a person's charges into billings (one card statement, or one month of cash/debit), then lets
- * their repayments settle them oldest first. A billing still owing after its due date is "unpaid", and
- * what's left moves to the next billing, so "Paid" on a billing always pays it plus anything before it.
+ * Groups a person's charges into billings (one card statement, or one month of cash/debit), then settles
+ * them with their repayments: a repayment for an item covers that item's months oldest first, and the
+ * rest (untargeted, or more than the item needed) covers billings oldest first. A billing still owing
+ * after its due date is "unpaid", and what's left moves to the next billing, so "Paid" on a billing
+ * always pays it plus anything before it.
  */
-function billingsFor(inputs: BillingInput[], cards: Map<number, Card>, repaidMinor: number, today: string): PersonBilling[] {
+export function billingsFor(
+  inputs: BillingInput[],
+  cards: Map<number, Card>,
+  payments: { amountMinor: number; itemKey: string | null }[],
+  today: string,
+): PersonBilling[] {
   const groups = new Map<string, Omit<PersonBilling, "paidMinor" | "remainingMinor" | "carriedInMinor" | "payMinor" | "status" | "movedTo">>();
   for (const { cardId, ...item } of inputs) {
     const card = cardId !== null ? cards.get(cardId) : undefined;
@@ -148,25 +164,51 @@ function billingsFor(inputs: BillingInput[], cards: Map<number, Card>, repaidMin
     const dueDate = card && closeDate ? dueDateFor(closeDate, card.dueDay) : endOfMonth(item.occurredOn);
     const key = `${card?.id ?? "cash"}|${dueDate}`;
     const group = groups.get(key) ?? { key, cardId: card?.id ?? null, cardName: card?.name ?? null, closeDate, dueDate, items: [], amountMinor: 0 };
-    group.items.push({ ...item, paid: false });
+    group.items.push({ ...item, paid: false, paidMinor: 0 });
     group.amountMinor += item.amountMinor;
     groups.set(key, group);
   }
   for (const g of groups.values()) g.items.sort((a, b) => b.occurredOn.localeCompare(a.occurredOn));
   const ordered = [...groups.values()].sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.key.localeCompare(b.key));
+  const cover = (item: PersonBilling["items"][number], credit: number) => {
+    const used = Math.min(credit, item.amountMinor - item.paidMinor);
+    item.paidMinor += used;
+    return used;
+  };
 
-  let credit = Math.max(0, repaidMinor);
+  // A repayment for one month covers that month; more than it needed goes to the rest of its item.
+  // A repayment for an item covers that item's months, oldest first.
+  const byItem = new Map<string, PersonBilling["items"]>();
+  const byMonth = new Map<string, PersonBilling["items"][number]>();
+  for (const item of ordered.flatMap((g) => g.items)) {
+    byItem.set(itemKeyOf(item), [...(byItem.get(itemKeyOf(item)) ?? []), item]);
+    byMonth.set(item.monthKey, item);
+  }
+  let credit = 0;
+  const targeted = new Map<string, number>();
+  const toItem = (key: string, amount: number) => {
+    if (byItem.has(key)) targeted.set(key, (targeted.get(key) ?? 0) + amount);
+    else credit += amount;
+  };
+  for (const p of payments) {
+    const month = p.itemKey ? byMonth.get(p.itemKey) : undefined;
+    if (month && p.itemKey!.includes("-")) toItem(itemKeyOf(month), p.amountMinor - cover(month, p.amountMinor));
+    else if (p.itemKey) toItem(p.itemKey.split("-")[0]!, p.amountMinor);
+    else credit += p.amountMinor;
+  }
+  for (const [key, amount] of targeted) {
+    let left = amount;
+    for (const item of byItem.get(key)!.sort(oldestFirst)) left -= cover(item, left);
+    credit += left; // more than the item needed
+  }
+
   let owedBefore = 0; // unpaid from earlier billings
   let pastDueBefore = 0; // of that, from billings whose due date has passed
   const out: PersonBilling[] = ordered.map((g) => {
-    const paidMinor = Math.min(credit, g.amountMinor);
-    credit -= paidMinor;
-    // Within a billing, the payment covers its oldest charges first.
-    let cover = paidMinor;
-    for (const item of [...g.items].sort((a, b) => a.occurredOn.localeCompare(b.occurredOn) || a.key.localeCompare(b.key))) {
-      item.paid = cover >= item.amountMinor;
-      cover -= Math.min(cover, item.amountMinor);
-    }
+    // The rest settles billings oldest first, and within a billing its oldest charges first.
+    for (const item of [...g.items].sort(oldestFirst)) credit -= cover(item, credit);
+    for (const item of g.items) item.paid = item.paidMinor >= item.amountMinor;
+    const paidMinor = g.items.reduce((sum, i) => sum + i.paidMinor, 0);
     const remainingMinor = g.amountMinor - paidMinor;
     const pastDue = g.dueDate < today;
     const billing: PersonBilling = {
@@ -219,8 +261,8 @@ export function createPeopleRoutes(repos: Repositories) {
 
   /** A person's billings, oldest first: billed charges plus installment months still to come. */
   async function billingsOf(person: PersonTotals, cards: Map<number, Card>, upcoming: BillingInput[] = []) {
-    const shares = (await repos.people.shares(person.id)).map(fromShare);
-    return billingsFor([...shares, ...upcoming], cards, person.repaidMinor, todayLocal());
+    const [shares, payments] = await Promise.all([repos.people.shares(person.id), repos.people.payments(person.id)]);
+    return billingsFor([...shares.map(fromShare), ...upcoming], cards, payments, todayLocal());
   }
   const cardMap = async () => new Map((await repos.cards.list()).map((c) => [c.id, c]));
 
@@ -246,7 +288,7 @@ export function createPeopleRoutes(repos: Repositories) {
         const all = await plansByPerson(repos);
         const plans = all.plans.get(person.id) ?? [];
         const [shares, payments] = await Promise.all([repos.people.shares(person.id), repos.people.payments(person.id)]);
-        const billings = billingsFor([...shares.map(fromShare), ...(all.upcoming.get(person.id) ?? [])], await cardMap(), person.repaidMinor, todayLocal());
+        const billings = billingsFor([...shares.map(fromShare), ...(all.upcoming.get(person.id) ?? [])], await cardMap(), payments, todayLocal());
         // Active plans first, then by what's left.
         plans.sort((a, b) => (a.status === b.status ? b.upcomingMinor - a.upcomingMinor : a.status === "active" ? -1 : 1));
         return json({ ...summarize(person, plans, billings), shares, payments, plans, billings });
@@ -275,6 +317,13 @@ export function createPeopleRoutes(repos: Repositories) {
       POST: route(async (req: WithId) => {
         const person = await findPerson(req.params.id);
         const input = await readBody(req, newPersonPaymentSchema);
+        if (input.itemKey) {
+          // Only an item this person has a part of: one of their charges, or a plan that names them.
+          const shares = await repos.people.shares(person.id);
+          const plans = (await plansByPerson(repos)).plans.get(person.id) ?? [];
+          const theirs = new Set([...shares.map((s) => itemKeyOf(fromShare(s))), ...plans.map((p) => `p${p.installmentId}`)]);
+          if (!theirs.has(input.itemKey.split("-")[0]!)) throw new HttpError(400, "Some fields need fixing.", { itemKey: `That isn't one of ${person.name}'s items.` });
+        }
         return json(await repos.people.addPayment(person.id, input), 201);
       }),
     },

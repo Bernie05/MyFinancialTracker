@@ -1,6 +1,6 @@
-import { Button, Select, TextField } from "@mft/ui";
+import { Button, SegmentedControl, Select, TextField } from "@mft/ui";
 import { useState, type FormEvent } from "react";
-import { categoryColorPresets, colorOwner, newCardSchema, type CardSummary } from "../../../shared/contracts";
+import { categoryColorPresets, colorOwner, newCardSchema, type CardKind, type CardSummary } from "../../../shared/contracts";
 import { ApiError } from "../../api/client";
 import { api } from "../../api/endpoints";
 import { ColorPicker } from "../../layout/ColorPicker";
@@ -14,6 +14,8 @@ interface CardEditorProps {
   card: CardSummary | null;
   /** All cards, to keep colors unique among them. */
   all: CardSummary[];
+  /** For a new card: which page it's added from (Credit Cards or Online Credit). */
+  defaultKind?: CardKind;
   onSaved: (message: string, id: number) => void;
   onDeleted?: (message: string) => void;
   onCancel: () => void;
@@ -31,13 +33,18 @@ interface RateRow {
   rate: string;
 }
 const COMMON_TERMS = [3, 6, 9, 12, 18, 24, 36];
+const KINDS = [
+  { value: "bank", label: "Bank credit card" },
+  { value: "online", label: "Online credit" },
+] as const;
 let nextKey = 1;
 const rateRow = (months: number | string, rate: number | string): RateRow => ({ key: nextKey++, months: String(months), rate: String(rate) });
 
 /** Add or edit a card: identity, limit, statement and due days, reminder days, color, archive. */
-export function CardEditor({ card, all, onSaved, onDeleted, onCancel }: CardEditorProps) {
+export function CardEditor({ card, all, defaultKind = "bank", onSaved, onDeleted, onCancel }: CardEditorProps) {
   const others = all.filter((c) => c.id !== card?.id);
   const firstFree = categoryColorPresets.find((k) => !colorOwner(others, k));
+  const [kind, setKind] = useState<CardKind>(card?.kind ?? defaultKind);
   const [name, setName] = useState(card?.name ?? "");
   const [issuer, setIssuer] = useState(card?.issuer ?? "");
   const [last4, setLast4] = useState(card?.last4 ?? "");
@@ -78,6 +85,7 @@ export function CardEditor({ card, all, onSaved, onDeleted, onCancel }: CardEdit
       return { months: r.months.trim() === "" ? Number.NaN : Number(r.months), addOnRateBps: Math.round(Number(rate) * 100) };
     });
     const parsed = newCardSchema.safeParse({
+      kind,
       installmentRates,
       defaultPersonId: usualPerson ? Number(usualPerson) : null,
       name,
@@ -136,28 +144,43 @@ export function CardEditor({ card, all, onSaved, onDeleted, onCancel }: CardEdit
   // A card with charges is archived instead of deleted, so its history stays (the API enforces this too).
   async function removeOrArchive() {
     if (!card) return;
-    if (hasCharges) {
-      const saved = await api.updateCard(card.id, { archived: true });
-      refreshAlerts();
-      onSaved(`${card.name} archived`, saved.id);
-    } else {
-      await api.deleteCard(card.id);
-      refreshAlerts();
-      onDeleted?.(`${card.name} deleted`);
-    }
+    await api.deleteCard(card.id, { withHistory: hasCharges });
+    refreshAlerts();
+    onDeleted?.(`${card.name} deleted`);
   }
 
   const notify = Number(notifyDays);
-  const preview = { id: 0, name: name.trim() || "Card name", issuer: issuer.trim() || null, last4: /^\d{4}$/.test(last4) ? last4 : null, color: /^#[0-9a-fA-F]{6}$|^[a-z]+$/.test(color) ? color : "grey", limitMinor: 0, closingDay: 1, dueDay: 1, notifyDays: 0, archived: false, installmentRates: [], defaultPersonId: null };
+  const online = kind === "online";
+  const preview = { id: 0, kind, name: name.trim() || "Card name", issuer: issuer.trim() || null, last4: /^\d{4}$/.test(last4) ? last4 : null, color: /^#[0-9a-fA-F]{6}$|^[a-z]+$/.test(color) ? color : "grey", limitMinor: 0, closingDay: 1, dueDay: 1, notifyDays: 0, archived: false, installmentRates: [], defaultPersonId: null };
 
   return (
     <form className="cat-editor" onSubmit={onSubmit} noValidate>
       <div className="card-editor__preview">
         <CardFace card={preview} />
       </div>
-      <TextField label="Name" placeholder="BPI Gold" maxLength={40} value={name} onChange={(e) => setName(e.target.value)} error={errors.name} data-autofocus />
+      <div className="card-editor__kind">
+        <span className="mft-field__label" id="card-kind-label">Type</span>
+        <SegmentedControl aria-label="Type" options={KINDS} value={kind} onChange={setKind} />
+      </div>
+      <TextField
+        label="Name"
+        placeholder={online ? "SPayLater" : "BPI Gold"}
+        maxLength={40}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        error={errors.name}
+        data-autofocus
+      />
       <div className="add-form__grid">
-        <TextField label="Bank" hint="Optional" placeholder="BPI" maxLength={40} value={issuer} onChange={(e) => setIssuer(e.target.value)} error={errors.issuer} />
+        <TextField
+          label={online ? "Provider" : "Bank"}
+          hint="Optional"
+          placeholder={online ? "Shopee" : "BPI"}
+          maxLength={40}
+          value={issuer}
+          onChange={(e) => setIssuer(e.target.value)}
+          error={errors.issuer}
+        />
         <TextField
           label="Last 4 digits"
           hint="Optional. Never your full number."
@@ -291,9 +314,9 @@ export function CardEditor({ card, all, onSaved, onDeleted, onCancel }: CardEdit
       )}
 
       <div className="dialog__actions">
-        {card && !card.archived && (
+        {card && (
           <Button type="button" variant="ghost" className="dialog__left" onClick={() => setConfirmDelete(true)} disabled={busy}>
-            Delete card
+            {online ? "Delete account" : "Delete card"}
           </Button>
         )}
         <Button type="button" variant="secondary" onClick={onCancel}>
@@ -309,10 +332,10 @@ export function CardEditor({ card, all, onSaved, onDeleted, onCancel }: CardEdit
           title={`Delete “${card.name}”?`}
           message={
             hasCharges
-              ? `${card.name} has ${card.transactionCount} charge${card.transactionCount === 1 ? "" : "s"}, so deleting it would erase that history. Archive it instead: it leaves "Paid with" and reminders, and its history stays.`
-              : `${card.name} has no charges. Its payments and installment plans are deleted with it.`
+              ? `This deletes ${card.name} with its ${card.transactionCount} charge${card.transactionCount === 1 ? "" : "s"}, its loans and installments, and its payments, for good. They leave your expenses and reports. To keep the history, close this and tick Archived instead.`
+              : `${card.name} has no charges. Its payments, loans and installment plans are deleted with it.`
           }
-          confirmLabel={hasCharges ? "Archive card" : "Delete card"}
+          confirmLabel={hasCharges ? "Delete with history" : online ? "Delete account" : "Delete card"}
           onConfirm={removeOrArchive}
           onClose={() => setConfirmDelete(false)}
         />

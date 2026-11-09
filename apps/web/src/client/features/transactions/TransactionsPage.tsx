@@ -9,6 +9,9 @@ import { PageHeader } from "../../layout/PageHeader";
 import { refreshAlerts } from "../../lib/alerts";
 import { rangeLabel } from "../../lib/dates";
 import { useAsync } from "../../lib/useAsync";
+import { categoryColor } from "../../lib/categoryColor";
+import { usePeriod } from "../dashboard/period";
+import { SectionDashboard } from "../overview/SectionDashboard";
 import { AddTransactionForm } from "./AddTransactionForm";
 import { EditTransactionDialog } from "./EditTransactionDialog";
 import { Pagination } from "./Pagination";
@@ -23,17 +26,38 @@ import { useTransactionFilters } from "./useTransactionFilters";
  */
 const loadingFigure = <span className="skeleton__inline" aria-label="Loading" />;
 
-export function TransactionsPage({ type }: { type: TransactionType }) {
+/**
+ * A page's own narrowing, on by default (the chip's × or ?all=1 shows everything):
+ * "no-salary": income other than Salary (Other Income). Cash & Others has its own section page.
+ */
+type Scope = "no-salary";
+
+export function TransactionsPage({ type, title, scope }: { type: TransactionType; title?: string; scope?: Scope }) {
   const filters = useTransactionFilters(type);
   const { from, to, categoryId, cardId, q, page, pageSize } = filters;
   const [announcement, setAnnouncement] = useState("");
 
   const categories = useAsync(() => api.listCategories(), []);
   const cards = useAsync(() => api.listCards(), []);
+
+  // The Salary category (top level, by name) is what My Salary tracks; Other Income leaves it out.
+  const salaryId = categories.state.data?.find((c) => c.type === "income" && c.parentId === null && c.name.trim().toLowerCase() === "salary")?.id;
+  const noSalary = scope === "no-salary" && !filters.showAll && salaryId !== undefined && categoryId !== salaryId;
+  // Wait for the categories before the first Other Income query, so salary never flashes in.
+  const ready = scope !== "no-salary" || categories.state.status !== "loading" || categories.state.data !== undefined;
+  const excludeCategoryId = noSalary ? salaryId : undefined;
+
   const list = useAsync(
-    (signal) => api.listTransactions({ type, from, to, categoryId, cardId, q, page, pageSize }, signal),
-    [type, from, to, categoryId, cardId, q, page, pageSize],
+    (signal) =>
+      ready ? api.listTransactions({ type, from, to, categoryId, cardId, excludeCategoryId, q, page, pageSize }, signal) : new Promise<never>(() => {}),
+    [type, from, to, categoryId, cardId, excludeCategoryId, q, page, pageSize, ready],
   );
+  const period = usePeriod();
+  // The section's top-level categories (Other Income leaves Salary to My Salary).
+  const sources = categories.state.data
+    ?.filter((c) => c.type === type && c.parentId === null && !(scope === "no-salary" && c.id === salaryId))
+    .map((c) => ({ id: c.id, name: c.name, color: categoryColor(c.color) }));
+  const scopeChip = noSalary ? { label: "Salary not included", removeLabel: "Include salary" } : null;
 
   // Deleting the last row of the last page (or a stale link) can leave us past the end: step back.
   // Only act on an empty answer for *this* page, never on the previous query's data during a refetch.
@@ -57,13 +81,31 @@ export function TransactionsPage({ type }: { type: TransactionType }) {
     refresh(`${tx.description} deleted`);
   }
 
-  const noun = type === "expense" ? "Expenses" : "Income";
+  const noun = title ?? (type === "expense" ? "Expenses" : "Income");
   const totalMinor = data ? (type === "expense" ? data.expenseMinor : data.incomeMinor) : 0;
   const loading = list.state.status === "loading";
 
   return (
     <div className="page">
-      <PageHeader title={noun} subtitle={rangeLabel(from, to)} />
+      <PageHeader
+        title={noun}
+        subtitle={rangeLabel(from, to)}
+        back={type === "expense" ? { href: "/expenses", label: "Expenses" } : { href: "/income", label: "Income" }}
+      />
+
+      {/* A section page (Other Income) gets the shared dashboard, by category; picking one filters the list too. */}
+      {scope && sources && (
+        <SectionDashboard
+          type={type}
+          noun="category"
+          sources={sources}
+          base={salaryId !== undefined ? { excludeCategoryId: salaryId } : {}}
+          filterFor={(id) => ({ categoryId: id })}
+          picked={sources.some((s) => s.id === categoryId) ? categoryId! : null}
+          onPick={(id) => filters.update({ categoryId: id ?? undefined, page: undefined })}
+          period={period}
+        />
+      )}
 
       <section className="stats" aria-label="Totals for these filters">
         <StatTile label={type === "expense" ? "Total spent" : "Total received"} minorUnits={totalMinor} value={data ? undefined : loadingFigure} />
@@ -79,6 +121,7 @@ export function TransactionsPage({ type }: { type: TransactionType }) {
               filters={filters}
               categories={categories.state.data ?? []}
               cardName={cardId ? cards.state.data?.find((c) => c.id === cardId)?.name : undefined}
+              scope={scopeChip}
             />
             {/* Kept for empty results too (disabled), so stepping into an empty month doesn't move the list. */}
             {data && (

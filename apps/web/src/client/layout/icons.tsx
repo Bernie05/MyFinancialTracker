@@ -45,6 +45,40 @@ export const IncomeIcon = () => (
   </Icon>
 );
 
+/** A shopping bag: online credit (SPayLater, Lazada PayLater, Home Credit). */
+export const OnlineCreditIcon = () => (
+  <Icon>
+    <path d="M4.5 6.5h11l-.8 9.25a1.5 1.5 0 0 1-1.5 1.25H6.8a1.5 1.5 0 0 1-1.5-1.25z" />
+    <path d="M7.5 8.5V6a2.5 2.5 0 0 1 5 0v2.5" />
+  </Icon>
+);
+
+/** A house: other income (rent, condo, side income). */
+export const OtherIncomeIcon = () => (
+  <Icon>
+    <path d="M3.5 9 10 3.75 16.5 9" />
+    <path d="M5 8v8.25h10V8" />
+    <path d="M8.5 16.25v-4h3v4" />
+  </Icon>
+);
+
+/** A banknote: cash and other non-card expenses. */
+export const CashIcon = () => (
+  <Icon>
+    <rect x="2.75" y="5.5" width="14.5" height="9" rx="1.5" />
+    <circle cx="10" cy="10" r="2" />
+    <path d="M5.5 8.25v3.5M14.5 8.25v3.5" />
+  </Icon>
+);
+
+/** A pay envelope: My Salary. */
+export const SalaryIcon = () => (
+  <Icon>
+    <rect x="2.75" y="4.5" width="14.5" height="11" rx="2" />
+    <path d="M2.75 8.5h14.5M6 12h3" />
+  </Icon>
+);
+
 export const BudgetIcon = () => (
   <Icon>
     <path d="M10 2.75A7.25 7.25 0 1 0 17.25 10H10z" />
