@@ -6,6 +6,7 @@
 import {
   colorOwner,
   deleteCategoryQuerySchema,
+  budgetInputSchema,
   idSchema,
   monthlyQuerySchema,
   monthQuerySchema,
@@ -264,6 +265,22 @@ export function createApiRoutes(repos: Repositories) {
         const { from, to } = readQuery(req, rangeQuerySchema);
         await ensureInstallmentsSynced(repos);
         return json(await repos.summary.range(from, to));
+      }),
+    },
+
+    "/api/budgets": {
+      GET: route(async () => json(await repos.budgets.list())),
+    },
+
+    "/api/budgets/:categoryId": {
+      // Budgets go on top-level expense categories; null clears one.
+      PUT: route(async (req: Request & { params: { categoryId: string } }) => {
+        const category = await repos.categories.findById(idSchema.parse(req.params.categoryId));
+        if (!category) throw new HttpError(404, "That category doesn't exist anymore.");
+        if (category.type !== "expense" || category.parentId !== null) throw fieldError(400, { limitMinor: "Budgets go on top-level expense categories." });
+        const { limitMinor } = await readBody(req, budgetInputSchema);
+        await repos.budgets.set(category.id, limitMinor);
+        return json(await repos.budgets.list());
       }),
     },
 

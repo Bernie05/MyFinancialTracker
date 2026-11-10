@@ -37,7 +37,7 @@ const entryLabel = (e: ScheduleEntry, months: number) =>
 
 /**
  * Everything paid or billed on this card, grouped: one group per installment plan (its months as
- * sub-rows, newest first) and one for payments made to the card. Active plans start open.
+ * sub-rows, newest first) and one for payments made to the card. Every group starts closed.
  */
 export function PaymentsView({ card, categories, payments, cards, onRecordPayment, onChanged }: PaymentsViewProps) {
   const plans = useAsync(() => api.listInstallments(card.id), [card.id]);
@@ -50,13 +50,13 @@ export function PaymentsView({ card, categories, payments, cards, onRecordPaymen
   }
 
   const paidTotal = payments.reduce((sum, p) => sum + p.amountMinor, 0);
-  // An online credit account (SpayLater, SLoan…) shows just its loans; a bank card also has everyday charges and payments.
+  // An online credit account (SpayLater, SLoan…) shows its other charges and loans; a bank card also has installments and payments.
   const loansOnly = card.kind === "online";
 
   return (
     <Card
-      title={loansOnly ? "Loans" : "Charges and payments"}
-      subtitle={loansOnly ? "Each loan with its monthly schedule" : "Everyday charges by statement, installment plans, and what you've paid"}
+      title={loansOnly ? "Charges and loans" : "Charges and payments"}
+      subtitle={loansOnly ? "Other charges by statement, and each loan with its monthly schedule" : "Everyday charges by statement, installment plans, and what you've paid"}
       padding="none"
       action={
         <span className="pgroups__add">
@@ -77,7 +77,7 @@ export function PaymentsView({ card, categories, payments, cards, onRecordPaymen
           return (
             <div className="pgroups">
               {/* Everyday charges first: the group that changes daily. Then plans, then payments. */}
-              {!loansOnly && <OtherCharges card={card} categories={categories} cards={cards} onChanged={onChanged} />}
+              <OtherCharges card={card} categories={categories} cards={cards} onChanged={onChanged} />
               {ordered.map((plan) => (
                 <PlanGroup key={plan.id} plan={plan} onAction={(kind) => setMode({ kind, plan })} />
               ))}
@@ -86,7 +86,7 @@ export function PaymentsView({ card, categories, payments, cards, onRecordPaymen
               )}
 
               {!loansOnly && (
-              <details className="pgroup" open>
+              <details className="pgroup">
                 <summary className="pgroup__head">
                   <span className="pgroup__title">
                     <span className="pgroup__name">Card payments</span>
@@ -211,7 +211,7 @@ function PlanGroup({ plan, onAction }: { plan: InstallmentDetail; onAction: (kin
   );
 
   return (
-    <details className="pgroup" open={active}>
+    <details className="pgroup">
       <summary className="pgroup__head">
         <span className="pgroup__title">
           <span className="pgroup__name">{plan.description}</span>

@@ -55,7 +55,29 @@ export function CardEditor({ card, all, defaultKind = "bank", onSaved, onDeleted
   const [color, setColor] = useState(card?.color ?? firstFree ?? "#c0392b");
   const [archived, setArchived] = useState(card?.archived ?? false);
   const [usualPerson, setUsualPerson] = useState(card?.defaultPersonId ? String(card.defaultPersonId) : "");
-  const { people } = usePeople();
+  const { people, reload: reloadPeople } = usePeople();
+  // "+ Add person": a name box under "Usually used by"; the new person is picked right away.
+  const [addingPerson, setAddingPerson] = useState(false);
+  const [newPerson, setNewPerson] = useState("");
+  const [personError, setPersonError] = useState<string | null>(null);
+  const [personBusy, setPersonBusy] = useState(false);
+
+  async function addPerson() {
+    if (!newPerson.trim() || personBusy) return;
+    setPersonError(null);
+    setPersonBusy(true);
+    try {
+      const person = await api.createPerson({ name: newPerson });
+      reloadPeople();
+      setUsualPerson(String(person.id));
+      setAddingPerson(false);
+      setNewPerson("");
+    } catch (err) {
+      setPersonError(err instanceof ApiError ? (err.fields.name ?? err.message) : "Couldn't add them. Try again.");
+    } finally {
+      setPersonBusy(false);
+    }
+  }
   const [rates, setRates] = useState<RateRow[]>(() => (card?.installmentRates ?? []).map((r) => rateRow(r.months, r.addOnRateBps / 100)));
   /** Per rate row (by key): the message to show under it. */
   const [rateErrors, setRateErrors] = useState<Record<number, string>>({});
@@ -246,6 +268,38 @@ export function CardEditor({ card, all, defaultKind = "bank", onSaved, onDeleted
           ...people.filter((p) => !p.archived || String(p.id) === usualPerson).map((p) => ({ value: String(p.id), label: p.name })),
         ]}
       />
+      {addingPerson ? (
+        <div className="split-field__add">
+          <TextField
+            label="Person's name"
+            placeholder="Ana"
+            maxLength={40}
+            autoFocus
+            value={newPerson}
+            onChange={(e) => setNewPerson(e.target.value)}
+            // Enter adds the person instead of saving the whole card.
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void addPerson();
+              }
+            }}
+            error={personError ?? undefined}
+          />
+          <Button type="button" size="sm" onClick={addPerson} loading={personBusy} disabled={!newPerson.trim()}>
+            Add
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => { setAddingPerson(false); setPersonError(null); }}>
+            Cancel
+          </Button>
+        </div>
+      ) : (
+        <div className="card-editor__add-person">
+          <Button type="button" variant="secondary" size="sm" onClick={() => setAddingPerson(true)}>
+            + Add person
+          </Button>
+        </div>
+      )}
 
       <fieldset className="card-rates">
         <legend>Installment rates</legend>

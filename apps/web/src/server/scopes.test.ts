@@ -146,3 +146,26 @@ test("an account with history is refused by a plain delete, and deleted with all
   const left = (await call("GET", "/api/transactions?type=expense&from=2026-01-01&to=2026-12-31")).body;
   expect(left.items.filter((t: { description: string }) => t.description.startsWith("Charge") || t.description.startsWith("Loan"))).toHaveLength(0);
 });
+
+test("budgets: one standing amount per top-level expense category, yours only, cleared with null", async () => {
+  const call = await user("budgets@example.com");
+  const categories = (await call("GET", "/api/categories")).body as { id: number; name: string; type: string; parentId: number | null }[];
+  const groceries = categories.find((c) => c.name === "Groceries")!.id;
+  const salary = categories.find((c) => c.name === "Salary")!.id;
+  const sub = (await call("POST", "/api/categories", { name: "Veggies", type: "expense", parentId: groceries })).body.id;
+
+  expect((await call("GET", "/api/budgets")).body).toEqual([]);
+  expect((await call("PUT", `/api/budgets/${groceries}`, { limitMinor: 5_000_00 })).body).toEqual([{ categoryId: groceries, limitMinor: 5_000_00 }]);
+  // Setting it again replaces it.
+  expect((await call("PUT", `/api/budgets/${groceries}`, { limitMinor: 6_000_00 })).body).toEqual([{ categoryId: groceries, limitMinor: 6_000_00 }]);
+  expect((await call("PUT", `/api/budgets/${salary}`, { limitMinor: 1_00 })).status).toBe(400);
+  expect((await call("PUT", `/api/budgets/${sub}`, { limitMinor: 1_00 })).status).toBe(400);
+  expect((await call("PUT", `/api/budgets/${groceries}`, { limitMinor: 0 })).status).toBe(400);
+
+  // Another user can't see or set it.
+  const other = await user("budgets-other@example.com");
+  expect((await other("GET", "/api/budgets")).body).toEqual([]);
+  expect((await other("PUT", `/api/budgets/${groceries}`, { limitMinor: 1_00 })).status).toBe(404);
+
+  expect((await call("PUT", `/api/budgets/${groceries}`, { limitMinor: null })).body).toEqual([]);
+});

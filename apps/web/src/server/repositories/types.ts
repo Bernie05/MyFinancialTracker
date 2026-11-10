@@ -5,7 +5,7 @@
  * from SQLite to Neon (or faking the data in a test) means writing a new implementation,
  * not touching a route.
  */
-import type {
+import type { Budget,
   Card,
   CardPayment,
   Category,
@@ -120,6 +120,14 @@ export interface Repositories {
   imports: ImportRepository;
   people: PeopleRepository;
   salary: SalaryRepository;
+  budgets: BudgetRepository;
+}
+
+/** One standing monthly budget per category (see shared/contracts.ts, Budgets). */
+export interface BudgetRepository {
+  list(): Promise<Budget[]>;
+  /** Sets the category's budget, or clears it with null. Callers check the category is yours. */
+  set(categoryId: number, limitMinor: number | null): Promise<void>;
 }
 
 export interface PeopleRepository {

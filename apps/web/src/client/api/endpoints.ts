@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  budgetSchema,
   cardAlertSchema,
   cardPaymentSchema,
   cardSummarySchema,
@@ -114,6 +115,10 @@ export const api = {
     request(`/api/summary/range?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, rangeSummarySchema),
 
   // My salary
+  listBudgets: () => request("/api/budgets", z.array(budgetSchema)),
+  setBudget: (categoryId: number, limitMinor: number | null) =>
+    request(`/api/budgets/${categoryId}`, z.array(budgetSchema), { method: "PUT", body: JSON.stringify({ limitMinor }) }),
+
   getSalary: () => request("/api/salary", salaryResponseSchema),
   saveSalary: (input: SalaryInput) => request("/api/salary", salaryResponseSchema, { method: "PUT", body: JSON.stringify(input) }),
 

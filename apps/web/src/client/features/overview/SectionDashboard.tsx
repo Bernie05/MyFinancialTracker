@@ -34,10 +34,22 @@ export interface SectionDashboardProps {
   period: Period;
   /** Credit accounts in this section: shows limit − used = available for the pick. */
   credit?: CardSummary[];
-  /** The section's own figures after the month total (due now, next payment…); built for the pick. */
-  tiles?: ReactNode;
+  /** The section's own figures after the month total (due now, still to bill…); built for the pick. */
+  tiles?: ReactNode | ((ctx: SectionContext) => ReactNode);
+  /** In place of the credit summary: the section's own (Cash & Others: budget − spent = left). */
+  summary?: (ctx: SectionContext) => ReactNode;
+  /** Page parts above the dashboard that need its figures (Cash & Others: category tiles). */
+  before?: (ctx: SectionContext) => ReactNode;
+  /** The page parts under the dashboard that need its figures (Cash & Others: budgets, transactions). */
+  after?: (ctx: SectionContext) => ReactNode;
   /** Bump to refetch after something in the section was added, edited or deleted. */
   reloadKey?: number;
+}
+
+/** What the dashboard already loaded, for the page's own parts. */
+export interface SectionContext {
+  /** Each source's total in the picked month; undefined while loading. */
+  spent: Map<number, number> | undefined;
 }
 
 const amountOf = (type: TransactionType, r: MonthTotals | undefined) => (r ? (type === "expense" ? r.expenseMinor : r.incomeMinor) : 0);
@@ -47,7 +59,7 @@ const amountOf = (type: TransactionType, r: MonthTotals | undefined) => (r ? (ty
  * Pick "All accounts" or one of them, and a month: the credit summary, the tiles, the chart and the
  * breakdown all follow, so it works the same with one account or ten.
  */
-export function SectionDashboard({ type, noun, sources, base, filterFor, picked, onPick, period, credit, tiles, reloadKey = 0 }: SectionDashboardProps) {
+export function SectionDashboard({ type, noun, sources, base, filterFor, picked, onPick, period, credit, tiles, summary, before, after, reloadKey = 0 }: SectionDashboardProps) {
   const { year, month, prevMonth, monthName, yearLabel } = period;
   const to = `${year}-12`;
   const plural = noun === "account" ? "accounts" : "categories";
@@ -84,10 +96,12 @@ export function SectionDashboard({ type, noun, sources, base, filterFor, picked,
         })
         .sort((a, b) => b.month - a.month || b.year - a.year)
     : undefined;
+  const ctx: SectionContext = { spent: breakdown && new Map(breakdown.map((b) => [b.source.id, b.month])) };
   const monthSum = breakdown?.reduce((sum, b) => sum + b.month, 0) ?? 0;
 
   return (
     <>
+      {before?.(ctx)}
       <div className="section-dash__bar">
         <Select
           label={noun === "account" ? "Account" : "Category"}
@@ -98,6 +112,7 @@ export function SectionDashboard({ type, noun, sources, base, filterFor, picked,
         <PeriodPicker period={period} />
       </div>
 
+      {summary?.(ctx)}
       {credit && <CreditSummary cards={pickedSource ? credit.filter((c) => c.id === pickedSource.id) : credit} title={pickedSource?.name ?? "Credit"} />}
 
       <section className="kpis" aria-label={`${pickedSource?.name ?? `All ${plural}`}, ${monthName}`}>
@@ -110,7 +125,7 @@ export function SectionDashboard({ type, noun, sources, base, filterFor, picked,
           yearLabel={yearLabel}
           year={money(yearTotal, "sm")}
         />
-        {tiles ?? (
+        {(typeof tiles === "function" ? tiles(ctx) : tiles) ?? (
           <>
             <PeriodTile
               label="Monthly average"
@@ -183,6 +198,7 @@ export function SectionDashboard({ type, noun, sources, base, filterFor, picked,
           </div>
         </Card>
       </div>
+      {after?.(ctx)}
     </>
   );
 }

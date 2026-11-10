@@ -4530,7 +4530,7 @@ mark {
 }
 
 .loans__accounts-title {
-  margin-top: var(--space-6);
+  margin-top: 0;
   margin-bottom: var(--space-3);
 }
 
@@ -5033,4 +5033,45 @@ li.loan-account__item > button.loan-account__delete {
     flex: 1 1 0;
     text-align: center;
   }
+}
+
+/* A strip of three tiles (credit sections: spent, due now, still to bill) fills the row instead of leaving a gap. */
+@media (min-width: 640px) {
+  .kpis:has(> :nth-child(3):last-child) > :last-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (min-width: 1200px) {
+  .kpis:has(> :nth-child(3):last-child) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .kpis:has(> :nth-child(3):last-child) > :last-child {
+    grid-column: auto;
+  }
+}
+
+/* Card editor: "+ Add person" sits under "Usually used by", aligned with the field. */
+.card-editor__add-person {
+  margin-top: calc(var(--space-2) * -1);
+}
+
+/* No accounts yet: the add prompt spans the whole tile grid. */
+.loan-accounts__empty {
+  grid-column: 1 / -1;
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+/* Cash & Others: budget rows and category tiles are buttons styled like loan rows and account tiles. */
+button.budget-row,
+button.loan-account {
+  width: 100%;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.budget-row {
+  background: transparent;
 }

@@ -54,7 +54,7 @@ export function OtherCharges({ card, categories, cards, onChanged }: OtherCharge
   const data = list.state.data;
 
   return (
-    <details className="pgroup" open>
+    <details className="pgroup">
       <summary className="pgroup__head">
         <span className="pgroup__title">
           <span className="pgroup__name">Other charges</span>
@@ -106,14 +106,13 @@ export function OtherCharges({ card, categories, cards, onChanged }: OtherCharge
             groups.set(rootId, group);
           }
           const sorted = [...groups.values()].sort((a, b) => b.total - a.total);
-          const openAll = sorted.length <= 3;
           return (
             <>
               <div className="oc-groups">
-                {sorted.map((g, i) => {
+                {sorted.map((g) => {
                   const color = categoryColor(g.category.color);
                   return (
-                    <details key={`${g.category.id}-${from}`} className="oc-group" open={openAll || i === 0}>
+                    <details key={`${g.category.id}-${from}`} className="oc-group">
                       <summary className="oc-group__head">
                         <span className="cat-row__swatch" style={{ background: color }} aria-hidden="true" />
                         <span className="oc-group__name">{g.category.name}</span>

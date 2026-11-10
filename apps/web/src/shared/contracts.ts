@@ -794,3 +794,15 @@ export const apiErrorSchema = z.object({
   }),
 });
 export type ApiErrorBody = z.infer<typeof apiErrorSchema>;
+
+// Budgets ---------------------------------------------------------------------
+
+/**
+ * A standing monthly budget on a top-level expense category: Cash & Others shows budget − spent = left,
+ * the way a credit section shows limit − used = available.
+ */
+export const budgetSchema = z.object({ categoryId: idSchema, limitMinor: z.number().int() });
+export type Budget = z.infer<typeof budgetSchema>;
+/** null clears the budget. */
+export const budgetInputSchema = z.object({ limitMinor: amountMinorSchema.nullable() });
+export type BudgetInput = z.infer<typeof budgetInputSchema>;

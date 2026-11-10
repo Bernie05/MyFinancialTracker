@@ -162,7 +162,7 @@ export function CreditSectionPage({ kind }: { kind: CardKind }) {
 }
 
 /** Each lender account with what's owed; open one to add a loan to it, or delete it. */
-function AccountList({ kind, accounts, onDeleted }: { kind: CardKind; accounts: CardSummary[]; onDeleted: () => void }) {
+function AccountList({ kind, accounts, onAdd, onDeleted }: { kind: CardKind; accounts: CardSummary[]; onAdd: () => void; onDeleted: () => void }) {
   const copy = COPY[kind];
   const [deleting, setDeleting] = useState<CardSummary | null>(null);
   const loansOn = (a: CardSummary) => a.summary.activeInstallments;
@@ -187,6 +187,21 @@ function AccountList({ kind, accounts, onDeleted }: { kind: CardKind; accounts: 
             </Button>
           </li>
         ))}
+        {accounts.length === 0 && (
+          <li className="loan-accounts__empty">
+            <EmptyState
+              icon={copy.icon}
+              heading={copy.empty}
+              action={
+                <Button iconStart={<PlusIcon />} onClick={onAdd}>
+                  {copy.add}
+                </Button>
+              }
+            >
+              {copy.emptyText}
+            </EmptyState>
+          </li>
+        )}
       </ul>
       <ConfirmDialog
         open={deleting !== null}
@@ -212,41 +227,26 @@ function AccountList({ kind, accounts, onDeleted }: { kind: CardKind; accounts: 
   );
 }
 
-/** The shared section dashboard, then payments due, plans, transactions and accounts: all follow the picked account. */
+/** Accounts first, then the shared section dashboard, payments due, plans and transactions: all follow the picked account. */
 function CreditBody({ kind, accounts, loans, onAddAccount, onChanged }: { kind: CardKind; accounts: CardSummary[]; loans: Loan[]; onAddAccount: () => void; onChanged: () => void }) {
   const copy = COPY[kind];
   const period = usePeriod();
   const [picked, setPicked] = useState<number | null>(null);
   const [version, setVersion] = useState(0);
 
-  if (accounts.length === 0) {
-    return (
-      <section className="panel panel--empty" aria-label="No accounts yet">
-        <EmptyState
-          icon={copy.icon}
-          heading={copy.empty}
-          action={
-            <Button iconStart={<PlusIcon />} onClick={onAddAccount}>
-              {copy.add}
-            </Button>
-          }
-        >
-          {copy.emptyText}
-        </EmptyState>
-      </section>
-    );
-  }
+  // With no accounts yet the page keeps its full layout (all zeros); the list at the top offers the first one.
 
   const shownAccounts = picked === null ? accounts : accounts.filter((a) => a.id === picked);
   const shownLoans = picked === null ? loans : loans.filter((l) => l.account.id === picked);
   const active = shownLoans.filter((l) => l.plan.status === "active");
   const finished = shownLoans.filter((l) => l.plan.status === "completed");
-  const nextDue = active.filter((l) => l.next).sort((a, b) => a.next!.dueDate.localeCompare(b.next!.dueDate))[0];
   const dueNow = shownAccounts.filter((a) => !a.archived).reduce((sum, a) => sum + a.summary.remainingDueMinor, 0);
   const monthly = active.reduce((s, l) => s + l.plan.monthlyMinor, 0);
 
   return (
     <>
+      <AccountList kind={kind} accounts={shownAccounts} onAdd={onAddAccount} onDeleted={() => { setPicked(null); onChanged(); }} />
+
       <SectionDashboard
         type="expense"
         noun="account"
@@ -267,13 +267,6 @@ function CreditBody({ kind, accounts, loans, onAddAccount, onChanged }: { kind: 
               note={`Future months of active ${copy.plans}`}
               yearLabel="Active"
               year={String(active.length)}
-            />
-            <PeriodTile
-              label="Next payment"
-              month={<span className="mft-stat__value mft-amount--lg">{nextDue?.next ? shortDate(nextDue.next.dueDate) : "—"}</span>}
-              note={nextDue?.next ? dueText(daysBetween(todayLocal(), nextDue.next.dueDate)) : "Nothing scheduled"}
-              yearLabel={nextDue?.account.name ?? "Amount"}
-              year={nextDue?.next ? money(nextDue.next.amountMinor, "sm") : "—"}
             />
           </>
         }
@@ -312,8 +305,6 @@ function CreditBody({ kind, accounts, loans, onAddAccount, onChanged }: { kind: 
           onChanged();
         }}
       />
-
-      <AccountList kind={kind} accounts={shownAccounts} onDeleted={() => { setPicked(null); onChanged(); }} />
     </>
   );
 }

@@ -14,6 +14,7 @@ import { currentUserId as uid } from "../context";
 import type { Db } from "../db/client";
 import { allocate, type Split } from "../../shared/split";
 import {
+  budgets,
   cardPayments,
   categories,
   creditCards,
@@ -26,6 +27,7 @@ import {
   transactionShares,
 } from "../db/schema";
 import type {
+  BudgetRepository,
   CardRepository,
   CategoryRef,
   CategoryRepository,
@@ -813,8 +815,25 @@ function createSalaryRepository(db: Db): SalaryRepository {
   };
 }
 
+function createBudgetRepository(db: Db): BudgetRepository {
+  return {
+    async list() {
+      return db.select({ categoryId: budgets.categoryId, limitMinor: budgets.limitMinor }).from(budgets).where(eq(budgets.userId, uid()));
+    },
+    async set(categoryId, limitMinor) {
+      const userId = uid();
+      // One row per category: `month` records when it was set; the budget applies to every month.
+      db.transaction((tx) => {
+        tx.delete(budgets).where(and(eq(budgets.categoryId, categoryId), eq(budgets.userId, userId))).run();
+        if (limitMinor !== null) tx.insert(budgets).values({ userId, categoryId, month: new Date().toISOString().slice(0, 7), limitMinor }).run();
+      });
+    },
+  };
+}
+
 export function createDrizzleRepositories(db: Db): Repositories {
   return {
+    budgets: createBudgetRepository(db),
     salary: createSalaryRepository(db),
     people: createPeopleRepository(db),
     imports: createImportRepository(db),
