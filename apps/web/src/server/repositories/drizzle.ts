@@ -15,6 +15,8 @@ import type { Db } from "../db/client";
 import { allocate, type Split } from "../../shared/split";
 import {
   budgets,
+  monthlyBudgets,
+  cashCards,
   cardPayments,
   categories,
   creditCards,
@@ -826,6 +828,31 @@ function createBudgetRepository(db: Db): BudgetRepository {
       db.transaction((tx) => {
         tx.delete(budgets).where(and(eq(budgets.categoryId, categoryId), eq(budgets.userId, userId))).run();
         if (limitMinor !== null) tx.insert(budgets).values({ userId, categoryId, month: new Date().toISOString().slice(0, 7), limitMinor }).run();
+      });
+    },
+    async getTotal() {
+      const row = db.select({ limitMinor: monthlyBudgets.limitMinor }).from(monthlyBudgets).where(eq(monthlyBudgets.userId, uid())).get();
+      return row?.limitMinor ?? null;
+    },
+    async setTotal(limitMinor) {
+      const userId = uid();
+      db.transaction((tx) => {
+        tx.delete(monthlyBudgets).where(eq(monthlyBudgets.userId, userId)).run();
+        if (limitMinor !== null) tx.insert(monthlyBudgets).values({ userId, limitMinor }).run();
+      });
+    },
+    async listCards() {
+      const rows = db.select({ categoryId: cashCards.categoryId }).from(cashCards).where(eq(cashCards.userId, uid())).orderBy(cashCards.id).all();
+      return rows.map((r) => r.categoryId);
+    },
+    async addCard(categoryId) {
+      db.insert(cashCards).values({ userId: uid(), categoryId }).onConflictDoNothing().run();
+    },
+    async removeCard(categoryId) {
+      const userId = uid();
+      db.transaction((tx) => {
+        tx.delete(cashCards).where(and(eq(cashCards.categoryId, categoryId), eq(cashCards.userId, userId))).run();
+        tx.delete(budgets).where(and(eq(budgets.categoryId, categoryId), eq(budgets.userId, userId))).run();
       });
     },
   };

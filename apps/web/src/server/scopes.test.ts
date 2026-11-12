@@ -169,3 +169,40 @@ test("budgets: one standing amount per top-level expense category, yours only, c
 
   expect((await call("PUT", `/api/budgets/${groceries}`, { limitMinor: null })).body).toEqual([]);
 });
+
+test("monthly budget: one main amount per user, replaced on set, cleared with null", async () => {
+  const call = await user("monthly-budget@example.com");
+  expect((await call("GET", "/api/monthly-budget")).body).toEqual({ limitMinor: null });
+  expect((await call("PUT", "/api/monthly-budget", { limitMinor: 20_000_00 })).body).toEqual({ limitMinor: 20_000_00 });
+  expect((await call("PUT", "/api/monthly-budget", { limitMinor: 25_000_00 })).body).toEqual({ limitMinor: 25_000_00 });
+  expect((await call("PUT", "/api/monthly-budget", { limitMinor: 0 })).status).toBe(400);
+
+
+  expect((await call("PUT", "/api/monthly-budget", { limitMinor: null })).body).toEqual({ limitMinor: null });
+});
+
+test("cash cards: a pick of top-level expense categories; removing one keeps the category and drops its budget", async () => {
+  const call = await user("cash-cards@example.com");
+  const categories = (await call("GET", "/api/categories")).body as { id: number; name: string }[];
+  const groceries = categories.find((c) => c.name === "Groceries")!.id;
+  const salary = categories.find((c) => c.name === "Salary")!.id;
+  const sub = (await call("POST", "/api/categories", { name: "Snacks", type: "expense", parentId: groceries })).body.id;
+
+  expect((await call("GET", "/api/cash-cards")).body).toEqual([]);
+  expect((await call("POST", "/api/cash-cards", { categoryId: groceries })).body).toEqual([{ categoryId: groceries }]);
+  // Adding it again changes nothing.
+  expect((await call("POST", "/api/cash-cards", { categoryId: groceries })).body).toEqual([{ categoryId: groceries }]);
+  expect((await call("POST", "/api/cash-cards", { categoryId: salary })).status).toBe(400);
+  expect((await call("POST", "/api/cash-cards", { categoryId: sub })).status).toBe(400);
+
+  // Another user can't see or touch it.
+  const other = await user("cash-cards-other@example.com");
+  expect((await other("GET", "/api/cash-cards")).body).toEqual([]);
+  expect((await other("POST", "/api/cash-cards", { categoryId: groceries })).status).toBe(404);
+  expect((await other("DELETE", `/api/cash-cards/${groceries}`)).status).toBe(404);
+
+  await call("PUT", `/api/budgets/${groceries}`, { limitMinor: 3_000_00 });
+  expect((await call("DELETE", `/api/cash-cards/${groceries}`)).body).toEqual([]);
+  expect((await call("GET", "/api/budgets")).body).toEqual([]);
+  expect(((await call("GET", "/api/categories")).body as { id: number }[]).some((c) => c.id === groceries)).toBe(true);
+});

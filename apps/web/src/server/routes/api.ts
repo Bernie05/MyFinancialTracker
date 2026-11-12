@@ -7,6 +7,7 @@ import {
   colorOwner,
   deleteCategoryQuerySchema,
   budgetInputSchema,
+  cashCardSchema,
   idSchema,
   monthlyQuerySchema,
   monthQuerySchema,
@@ -270,6 +271,38 @@ export function createApiRoutes(repos: Repositories) {
 
     "/api/budgets": {
       GET: route(async () => json(await repos.budgets.list())),
+    },
+
+    // Cash & Others cards: a pick of top-level expense categories. Removing one keeps the category.
+    "/api/cash-cards": {
+      GET: route(async () => json((await repos.budgets.listCards()).map((categoryId) => ({ categoryId })))),
+      POST: route(async (req) => {
+        const { categoryId } = await readBody(req, cashCardSchema);
+        const category = await repos.categories.findById(categoryId);
+        if (!category) throw new HttpError(404, "That category doesn't exist anymore.");
+        if (category.type !== "expense" || category.parentId !== null) throw fieldError(400, { categoryId: "Cards go on top-level expense categories." });
+        await repos.budgets.addCard(category.id);
+        return json((await repos.budgets.listCards()).map((id) => ({ categoryId: id })), 201);
+      }),
+    },
+
+    "/api/cash-cards/:categoryId": {
+      DELETE: route(async (req: Request & { params: { categoryId: string } }) => {
+        const category = await repos.categories.findById(idSchema.parse(req.params.categoryId));
+        if (!category) throw new HttpError(404, "That category doesn't exist anymore.");
+        await repos.budgets.removeCard(category.id);
+        return json((await repos.budgets.listCards()).map((id) => ({ categoryId: id })));
+      }),
+    },
+
+    // The main monthly budget for all of Cash & Others (e.g. ₱20,000); null clears it.
+    "/api/monthly-budget": {
+      GET: route(async () => json({ limitMinor: await repos.budgets.getTotal() })),
+      PUT: route(async (req) => {
+        const { limitMinor } = await readBody(req, budgetInputSchema);
+        await repos.budgets.setTotal(limitMinor);
+        return json({ limitMinor: await repos.budgets.getTotal() });
+      }),
     },
 
     "/api/budgets/:categoryId": {

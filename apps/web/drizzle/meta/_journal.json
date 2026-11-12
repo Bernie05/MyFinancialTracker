@@ -92,6 +92,20 @@
       "when": 1794217326445,
       "tag": "0012_loan_type",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1794291234029,
+      "tag": "0013_monthly_budget",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1794292218415,
+      "tag": "0014_cash_cards",
+      "breakpoints": true
     }
   ]
 }

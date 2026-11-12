@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   budgetSchema,
+  monthlyBudgetSchema,
+  cashCardSchema,
   cardAlertSchema,
   cardPaymentSchema,
   cardSummarySchema,
@@ -116,6 +118,12 @@ export const api = {
 
   // My salary
   listBudgets: () => request("/api/budgets", z.array(budgetSchema)),
+  listCashCards: () => request("/api/cash-cards", z.array(cashCardSchema)),
+  addCashCard: (categoryId: number) => request("/api/cash-cards", z.array(cashCardSchema), { method: "POST", body: JSON.stringify({ categoryId }) }),
+  removeCashCard: (categoryId: number) => request(`/api/cash-cards/${categoryId}`, z.array(cashCardSchema), { method: "DELETE" }),
+  getMonthlyBudget: () => request("/api/monthly-budget", monthlyBudgetSchema),
+  setMonthlyBudget: (limitMinor: number | null) =>
+    request("/api/monthly-budget", monthlyBudgetSchema, { method: "PUT", body: JSON.stringify({ limitMinor }) }),
   setBudget: (categoryId: number, limitMinor: number | null) =>
     request(`/api/budgets/${categoryId}`, z.array(budgetSchema), { method: "PUT", body: JSON.stringify({ limitMinor }) }),
 

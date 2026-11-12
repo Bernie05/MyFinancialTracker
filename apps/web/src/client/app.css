@@ -5075,3 +5075,221 @@ button.loan-account {
 button.budget-row {
   background: transparent;
 }
+
+/* Cash & Others category tile: "Expenses:" and "Limit:" lines; expenses turn red once over the limit. */
+.cat-limit {
+  flex-basis: 100%;
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  font-size: var(--type-caption-size);
+}
+
+.cat-limit__row {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.cat-limit dt {
+  color: var(--ink-muted);
+}
+
+.cat-limit dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cat-limit dd.cat-limit__over {
+  color: var(--expense);
+}
+
+/* Monthly budget summary (Cash & Others): the button that edits every category's budget. */
+.credit-sum__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Cash & Others category tiles are read-only: no hover underline, no room kept for a button. */
+.loan-account__item .loan-account--static {
+  padding-right: var(--space-4);
+  cursor: default;
+}
+
+.loan-account--static:hover .loan-account__name {
+  text-decoration: none;
+}
+
+/* Monthly budget dialog: the main budget, then one row per category (name · amount · bin), then the total. */
+.all-budgets__intro {
+  margin: 2px 0 0;
+  color: var(--ink-muted);
+  font-size: var(--type-caption-size);
+}
+
+.all-budgets__heading {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.all-budgets__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.all-budgets__row > .mft-field {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The main budget: label and hint above, bin level with the input. */
+.all-budgets__row--main {
+  align-items: flex-start;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.all-budgets__row--main .all-budgets__remove {
+  margin-top: 26px;
+}
+
+/* Category rows: one column, label beside its input, scrolling up and down only. */
+.all-budgets__rows {
+  display: grid;
+  gap: var(--space-2);
+  max-height: min(40vh, 280px);
+  margin: 0;
+  padding: 2px var(--space-2) 2px 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.all-budgets__row--cat > :first-child {
+  flex: none;
+}
+
+.all-budgets__row--cat .mft-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 180px);
+  align-items: center;
+  column-gap: var(--space-3);
+  row-gap: 2px;
+}
+
+.all-budgets__row--cat .mft-field__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.all-budgets__row--cat .mft-field__message {
+  grid-column: 1 / -1;
+}
+
+.all-budgets__row--cat .all-budgets__remove {
+  align-self: center;
+}
+
+.all-budgets__remove {
+  flex: none;
+}
+
+.all-budgets__remove:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.all-budgets__total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+
+.all-budgets__total-label {
+  margin-right: var(--space-2);
+}
+
+.all-budgets__total strong {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.all-budgets__count {
+  color: var(--ink-muted);
+  font-size: var(--type-caption-size);
+}
+
+.all-budgets__count--over {
+  color: var(--expense);
+}
+
+.all-budgets__error {
+  margin: 0;
+  color: var(--expense);
+  font-size: var(--type-caption-size);
+}
+
+@media (max-width: 420px) {
+  .all-budgets__row--cat .mft-field {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 420px) {
+  .all-budgets__row--cat {
+    align-items: flex-start;
+  }
+
+  .all-budgets__row--cat > :first-child {
+    margin-top: 5px;
+  }
+
+  .all-budgets__row--cat .all-budgets__remove {
+    align-self: flex-start;
+    margin-top: 26px;
+  }
+}
+
+/* Cash & Others: "Categories" heading with its Add card button. */
+.cat-cards__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.cat-cards__head .loans__accounts-title {
+  margin: 0;
+}
+
+.cat-cards__head + .loan-accounts__empty {
+  margin-bottom: var(--space-3);
+}
+
+/* Monthly budget dialog: pick a category to add as a card. */
+.all-budgets__add {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.all-budgets__add > .mft-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.all-budgets__empty {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--type-caption-size);
+}

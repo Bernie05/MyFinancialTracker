@@ -128,6 +128,16 @@ export interface BudgetRepository {
   list(): Promise<Budget[]>;
   /** Sets the category's budget, or clears it with null. Callers check the category is yours. */
   set(categoryId: number, limitMinor: number | null): Promise<void>;
+  /** The main monthly budget (all of Cash & Others), or null when not set. */
+  getTotal(): Promise<number | null>;
+  /** Sets the main monthly budget, or clears it with null. */
+  setTotal(limitMinor: number | null): Promise<void>;
+  /** The category ids picked as Cash & Others cards, oldest first. */
+  listCards(): Promise<number[]>;
+  /** Adds a card (no-op if it's already there). Callers check the category is yours and fits. */
+  addCard(categoryId: number): Promise<void>;
+  /** Removes the card and its category budget. The category itself is untouched. */
+  removeCard(categoryId: number): Promise<void>;
 }
 
 export interface PeopleRepository {

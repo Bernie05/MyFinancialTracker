@@ -806,3 +806,11 @@ export type Budget = z.infer<typeof budgetSchema>;
 /** null clears the budget. */
 export const budgetInputSchema = z.object({ limitMinor: amountMinorSchema.nullable() });
 export type BudgetInput = z.infer<typeof budgetInputSchema>;
+
+/** A card on Cash & Others: one picked top-level expense category. */
+export const cashCardSchema = z.object({ categoryId: idSchema });
+export type CashCard = z.infer<typeof cashCardSchema>;
+
+/** The main monthly budget for all of Cash & Others (null = not set). PUT takes budgetInputSchema. */
+export const monthlyBudgetSchema = z.object({ limitMinor: z.number().int().nullable() });
+export type MonthlyBudget = z.infer<typeof monthlyBudgetSchema>;

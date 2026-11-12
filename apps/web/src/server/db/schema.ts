@@ -309,6 +309,42 @@ export const personPayments = sqliteTable(
   (t) => [index("person_payments_person_idx").on(t.personId, t.paidOn), check("person_payments_amount_positive", sql`${t.amountMinor} > 0`)],
 );
 
+/**
+ * The category cards shown on Cash & Others: a pick of top-level expense categories, nothing more.
+ * Removing a card never touches the category; deleting the category removes its card.
+ */
+export const cashCards = sqliteTable(
+  "cash_cards",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references((): AnySQLiteColumn => users.id, { onDelete: "cascade" }),
+    categoryId: integer("category_id")
+      .notNull()
+      .references(() => categories.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("cash_cards_category_unique").on(t.categoryId), index("cash_cards_user_idx").on(t.userId)],
+);
+
+/**
+ * The main monthly budget for Cash & Others (e.g. ₱20,000): one standing amount per user, applied to
+ * every month. Category budgets are carved out of it; spending in every category counts against it.
+ */
+export const monthlyBudgets = sqliteTable(
+  "monthly_budgets",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references((): AnySQLiteColumn => users.id, { onDelete: "cascade" }),
+    limitMinor: integer("limit_minor").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("monthly_budgets_user_unique").on(t.userId), check("monthly_budgets_limit_positive", sql`${t.limitMinor} > 0`)],
+);
+
 export const budgets = sqliteTable(
   "budgets",
   {
